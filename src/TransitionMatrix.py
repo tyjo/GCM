@@ -113,3 +113,9 @@ class TransitionMatrix:
             q_fr = nxt[:]
 
         return prob
+
+    def tr_matrix(self, time):
+        """
+        
+        """
+        pass
