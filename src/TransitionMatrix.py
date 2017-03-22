@@ -86,36 +86,21 @@ class TransitionMatrix:
                 diag += self.off_diagional(fr, state)
         return -diag
 
-
-    def tr_prob(self, fr, time):
-        """
-        Takes: a starting state and time.
-        Returns: a list of probabilities of moving from state fr to any state at time t.
-        """
-        time = tf.constant(time, dtype=tf.float64)
-        prob = [tf.constant(1, dtype=tf.float64) if fr == state else tf.constant(0, dtype=tf.float64) for state in self.states]
-
-        # Row fr in the rate matrix Q^1 assuming entries (i,j) are the rates
-        # of moving from i to j
-        q_fr = []
-        for j in range(len(self.states)):
-            q_fr.append(self.rate_matrix(fr, self.states[j]))
-            prob[j] += q_fr[j]*time
-
-        # Number of terms to evaluate in the series expansion
-        for i in range(2,5):
-            # At the end of each iteration q_fr is row fr in Q^{i}
-            nxt = [tf.constant(0, dtype=tf.float64) for state in self.states]
-            for j in range(len(self.states)):
-                for k in range(len(self.states)):
-                    nxt[j] += q_fr[k]*self.rate_matrix(self.states[k], self.states[j])*time / factorial(i)
-                prob[j] += nxt[j]
-            q_fr = nxt[:]
-
-        return prob
-
     def tr_matrix(self, time):
         """
-        
+        Compute the Tensorflow graph for e^{Qt} for t = time and stores the result.
         """
-        pass
+        t = tf.constant(time, dtype=tf.float64)
+        I = tf.eye(len(self.states), dtype=tf.float64)
+        Q = tf.pack([ [self.rate_matrix(s1, s2) for s2 in self.states] for s1 in self.states ])
+        ret = I
+        for i in range(1, 50):
+            ret += self.matrix_power(Q, i)*tf.pow(t, i) / tf.constant(factorial(i), dtype=tf.float64)
+        return ret
+
+    def matrix_power(self, Q, n):
+        ret = Q
+        for i in range(1,n):
+            ret = tf.matmul(ret, Q)
+        return ret
+
