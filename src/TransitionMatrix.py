@@ -90,7 +90,6 @@ class TransitionMatrix:
         """
         Compute the Tensorflow graph for e^{Qt} for t = time and stores the result.
         """
-<<<<<<< HEAD
         t = tf.constant(time, dtype=tf.float64)
         I = tf.eye(len(self.states), dtype=tf.float64)
         Q = tf.pack([ [self.rate_matrix(s1, s2) for s2 in self.states] for s1 in self.states ])
@@ -104,7 +103,3 @@ class TransitionMatrix:
         for i in range(1,n):
             ret = tf.matmul(ret, Q)
         return ret
-
-=======
-        pass
->>>>>>> 3147a825f16e3a42974ce59f1e0a93e752b972a2
