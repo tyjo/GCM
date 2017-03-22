@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from scipy.special import factorial
-jhdsfjhdsf
+
 class TransitionMatrix:
 
     def __init__(self, tr_rate, tv_rate, on_rate, off_rate):
@@ -48,6 +48,17 @@ class TransitionMatrix:
                            "011": ["010", "001"],
                            "111": ["110", "101", "001"]}
 
+        # store previously computed matrix powers
+        self.matrix_powers = {}
+
+        # store previously computed transistion matrices
+        # tr_matrices[time] = e^{Qt}
+        self.tr_matrices = {}
+
+        # rate matrix
+        self.Q = tf.pack([ [self.rate_matrix(s1, s2) for s2 in self.states] for s1 in self.states ])
+
+
     def off_diagional(self, fr, to):
         """
         Returns off diagional entries (fr, to) in the rate matrix.
@@ -86,20 +97,63 @@ class TransitionMatrix:
                 diag += self.off_diagional(fr, state)
         return -diag
 
+
+    def matrix_power(self, M, n):
+        """
+        Compute matrix powers by repeated squaring and store the result.
+        """
+        if n in self.matrix_powers:
+            return self.matrix_powers[n]
+
+        # Find first power of 2
+        if n == 1:
+            return M
+        elif n == 2:
+            ret = tf.matmul(M, M)
+            self.matrix_powers[n] = ret
+            return ret
+        
+        ret = tf.eye(len(self.states), dtype=tf.float64)
+        while np.log2(n) != np.floor(np.log2(n)):
+            ret = tf.matmul(ret, M)
+            n -= 1
+        
+        # Repeated squaring
+        sqr = tf.matmul(M, M)
+        n /= 2
+        while n > 1:
+            sqr = tf.matmul(sqr, sqr)
+            n /= 2
+
+        ret = tf.matmul(ret, sqr)
+        self.matrix_powers[n] = ret
+        return ret
+
+
     def tr_matrix(self, time):
         """
         Compute the Tensorflow graph for e^{Qt} for t = time and stores the result.
         """
+        if time in self.tr_matrices:
+            return tr_matrices[time]
+
         t = tf.constant(time, dtype=tf.float64)
         I = tf.eye(len(self.states), dtype=tf.float64)
-        Q = tf.pack([ [self.rate_matrix(s1, s2) for s2 in self.states] for s1 in self.states ])
         ret = I
-        for i in range(1, 50):
+        Q = self.Q / 1024
+        for i in range(1, 10):
             ret += self.matrix_power(Q, i)*tf.pow(t, i) / tf.constant(factorial(i), dtype=tf.float64)
+        ret = self.matrix_power(ret, 1024)
+        self.tr_matrices[time] = ret
         return ret
 
-    def matrix_power(self, Q, n):
-        ret = Q
-        for i in range(1,n):
-            ret = tf.matmul(ret, Q)
-        return ret
+
+
+    def tr_prob(self, fr, to, time):
+        """
+        Returns the transition probility (fr, to) in P(time)
+        """
+        return self.tr_matrix(time)[self.states.index[fr]][self.states.index[to]]
+
+
+
