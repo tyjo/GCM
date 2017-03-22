@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from scipy.special import factorial
-
+jhdsfjhdsf
 class TransitionMatrix:
 
     def __init__(self, tr_rate, tv_rate, on_rate, off_rate):
@@ -90,6 +90,7 @@ class TransitionMatrix:
         """
         Compute the Tensorflow graph for e^{Qt} for t = time and stores the result.
         """
+<<<<<<< HEAD
         t = tf.constant(time, dtype=tf.float64)
         I = tf.eye(len(self.states), dtype=tf.float64)
         Q = tf.pack([ [self.rate_matrix(s1, s2) for s2 in self.states] for s1 in self.states ])
@@ -104,3 +105,6 @@ class TransitionMatrix:
             ret = tf.matmul(ret, Q)
         return ret
 
+=======
+        pass
+>>>>>>> 3147a825f16e3a42974ce59f1e0a93e752b972a2
