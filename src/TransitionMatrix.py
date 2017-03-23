@@ -151,7 +151,7 @@ class TransitionMatrix:
         """
         Returns the transition probility (fr, to) in P(time)
         """
-        return self.tr_matrix(time)[self.states.index[fr]][self.states.index[to]]
+        return self.tr_matrix(time)[self.states.index(fr), self.states.index(to)]
 
 
 
