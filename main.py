@@ -3,26 +3,36 @@ import src.TransitionMatrix as tm
 import src.PhyloTree as tree
 
 if __name__ == "__main__":
-    """
+    # Build transition matrix and compute
+    m = tm.TransitionMatrix(0.2, 0.1, 0.3, 0.5)
+    p1 = m.tr_matrix(10)
+    p2 = m.tr_matrix(20)
     sess = tf.Session()
-    m = tm.TransitionMatrix(0.1, 0.5, 3, 1)
-    #prob = m.tr_prob("A000", 0.1)
-    P = m.tr_matrix(100)
-    init = tf.global_variables_initializer()
-    fw = tf.summary.FileWriter("./log")
-    fw.add_graph(P.graph)
-    sess.run(init)
-    #prt = tf.Print(P,[P],summarize=64)
-    #sess.run(prt)
-    sess.run(P)
-    """
+    sess.run(tf.global_variables_initializer())
+    print(sess.run(p1))
+    print(sess.run(p2))
 
-    # Simulating observations from a tree
+    # Build a phylogenetic tree
     m = tm.TransitionMatrix(0.2, 0.1, 0.3, 0.5)
     root = tree.Node("root")
-    child1 = tree.Node("child1", 20)
-    child2 = tree.Node("child2", 20)
-    root.left = child1
-    root.right = child2
+    a1 = tree.Node("a1", 10)
+    a2 = tree.Node("a2", 10)
+    child1 = tree.Node("child1", 20, "A")
+    child2 = tree.Node("child2", 20, "A")
+    child3 = tree.Node("child3", 20, "T")
+    child4 = tree.Node("child4", 20, "T")
+    root.left = a1
+    root.right = a2
+    a1.left = child1
+    a1.right = child2
+    a2.left = child3
+    a2.right = child4
     phylo_tree = tree.PhyloTree(root, m)
-    phylo_tree.simulate(3)
+
+    # Simulate a sequence of length 3
+    #phylo_tree.simulate(3)
+
+    # Estimate the parameters of the model given
+    # observations A and T above
+    phylo_tree.estimate()
+    phylo_tree.print_parameters()
