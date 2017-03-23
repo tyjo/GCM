@@ -48,9 +48,6 @@ class TransitionMatrix:
                            "011": ["010", "001"],
                            "111": ["110", "101", "001"]}
 
-        # store previously computed matrix powers
-        self.matrix_powers = {}
-
         # store previously computed transistion matrices
         # tr_matrices[time] = e^{Qt}
         self.tr_matrices = {}
@@ -102,15 +99,11 @@ class TransitionMatrix:
         """
         Compute matrix powers by repeated squaring and store the result.
         """
-        if n in self.matrix_powers:
-            return self.matrix_powers[n]
-
         # Find first power of 2
         if n == 1:
             return M
         elif n == 2:
             ret = tf.matmul(M, M)
-            self.matrix_powers[n] = ret
             return ret
         
         ret = tf.eye(len(self.states), dtype=tf.float64, name="matrix_power_" + str(n))
@@ -126,7 +119,6 @@ class TransitionMatrix:
             n /= 2
 
         ret = tf.matmul(ret, sqr)
-        self.matrix_powers[n] = ret
         return ret
 
 
@@ -134,8 +126,8 @@ class TransitionMatrix:
         """
         Compute the Tensorflow graph for e^{Qt} for t = time and stores the result.
         """
-        if time in self.tr_matrices:
-            return self.tr_matrices[time]
+        #if time in self.tr_matrices:
+        #    return self.tr_matrices[time]
 
         t = tf.constant(time, dtype=tf.float64)
         ret = tf.eye(len(self.states), dtype=tf.float64, name="tr_matrix_" + str(time))
