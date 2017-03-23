@@ -17,10 +17,10 @@ if __name__ == "__main__":
     root = tree.Node("root")
     a1 = tree.Node("a1", 10)
     a2 = tree.Node("a2", 10)
-    child1 = tree.Node("child1", 20, "A")
-    child2 = tree.Node("child2", 20, "A")
-    child3 = tree.Node("child3", 20, "T")
-    child4 = tree.Node("child4", 20, "T")
+    child1 = tree.Node("child1", 20, "AC")
+    child2 = tree.Node("child2", 20, "AC")
+    child3 = tree.Node("child3", 20, "TC")
+    child4 = tree.Node("child4", 20, "TC")
     root.left = a1
     root.right = a2
     a1.left = child1
@@ -30,9 +30,8 @@ if __name__ == "__main__":
     phylo_tree = tree.PhyloTree(root, m)
 
     # Simulate a sequence of length 3
-    #phylo_tree.simulate(3)
+    phylo_tree.simulate(3)
 
-    # Estimate the parameters of the model given
-    # observations A and T above
+    # Estimate the parameters of the model given observations AC and TC above
     phylo_tree.estimate()
     phylo_tree.print_parameters()
