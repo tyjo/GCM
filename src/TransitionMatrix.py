@@ -6,16 +6,16 @@ class TransitionMatrix:
 
     def __init__(self, tr_rate, tv_rate, on_rate, off_rate):
         # transition rate
-        self.tr_rate = tf.Variable(tr_rate, dtype=tf.float64)
+        self.tr_rate = tf.Variable(tr_rate, dtype=tf.float64, name="tr_rate")
 
         # transversion rate
-        self.tv_rate = tf.Variable(tv_rate, dtype=tf.float64)
+        self.tv_rate = tf.Variable(tv_rate, dtype=tf.float64, name="tv_rate")
 
         # switch OFF/ON rate
-        self.on_rate = tf.Variable(on_rate, dtype=tf.float64)
+        self.on_rate = tf.Variable(on_rate, dtype=tf.float64, name="on_rate")
 
         # switch ON/OFF rate
-        self.off_rate = tf.Variable(off_rate, dtype=tf.float64)
+        self.off_rate = tf.Variable(off_rate, dtype=tf.float64, name="off_rate")
 
         # states
         self.states = ["A000", "A100", "A010", "A001", "A110", "A101", "A011", "A111",
@@ -56,7 +56,7 @@ class TransitionMatrix:
         self.tr_matrices = {}
 
         # rate matrix
-        self.Q = tf.pack([ [self.rate_matrix(s1, s2) for s2 in self.states] for s1 in self.states ])
+        self.Q = tf.pack([ [self.rate_matrix(s1, s2) for s2 in self.states] for s1 in self.states ], name="rate_matrix")
 
 
     def off_diagional(self, fr, to):
@@ -113,7 +113,7 @@ class TransitionMatrix:
             self.matrix_powers[n] = ret
             return ret
         
-        ret = tf.eye(len(self.states), dtype=tf.float64)
+        ret = tf.eye(len(self.states), dtype=tf.float64, name="matrix_power_" + str(n))
         while np.log2(n) != np.floor(np.log2(n)):
             ret = tf.matmul(ret, M)
             n -= 1
@@ -135,18 +135,16 @@ class TransitionMatrix:
         Compute the Tensorflow graph for e^{Qt} for t = time and stores the result.
         """
         if time in self.tr_matrices:
-            return tr_matrices[time]
+            return self.tr_matrices[time]
 
         t = tf.constant(time, dtype=tf.float64)
-        I = tf.eye(len(self.states), dtype=tf.float64)
-        ret = I
+        ret = tf.eye(len(self.states), dtype=tf.float64, name="tr_matrix_" + str(time))
         Q = self.Q / 1024
         for i in range(1, 10):
             ret += self.matrix_power(Q, i)*tf.pow(t, i) / tf.constant(factorial(i), dtype=tf.float64)
         ret = self.matrix_power(ret, 1024)
         self.tr_matrices[time] = ret
         return ret
-
 
 
     def tr_prob(self, fr, to, time):
