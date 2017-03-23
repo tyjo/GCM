@@ -4,11 +4,11 @@
 import numpy as np
 from scipy.special import factorial
 
-tr_rate = 2.5
-tv_rate = 1.5
-on_rate = 1.6
-off_rate = 2.3
-time = 1
+tr_rate = 0.1
+tv_rate = 0.5
+on_rate = 0.1
+off_rate = 1
+time = 100
 num_terms = 50
 
 states = ["A000", "A100", "A010", "A001", "A110", "A101", "A011", "A111",
@@ -78,8 +78,8 @@ def rate_matrix(fr, to):
 
 if __name__ == "__main__":
     I = np.identity(len(states))
-    Q = np.array([ [rate_matrix(s1, s2) for s2 in states] for s1 in states ])
+    Q = np.array([ [rate_matrix(s1, s2) for s2 in states] for s1 in states ]) / 1024
     ret = I
     for i in range(1, num_terms):
         ret += np.linalg.matrix_power(Q, i)*np.power(time,i) / factorial(i)
-    print(ret)
+    print(np.linalg.matrix_power(ret, 1024))
