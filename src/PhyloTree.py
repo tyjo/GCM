@@ -30,9 +30,8 @@ class PhyloTree:
 
         self.num_states = len(tr_matrix.states)
         # This should be the initial distribution
-        self.root.expectations = [ 1. / self.num_states for st in tr_matrix.states ]
-        self.setup_nodes_(root.left)
-        self.setup_nodes_(root.right)
+        self.root.expectations = np.array([ 1. / self.num_states for st in tr_matrix.states ])
+
 
     def check_tree_(self, root):
         """
@@ -48,16 +47,6 @@ class PhyloTree:
         self.check_tree_(root.left)
         self.check_tree_(root.right)
 
-    def setup_nodes_(self, node):
-        """
-        Sets up vector for expecations
-        """
-        if node == None:
-            return
-
-        node.expecations = [ 0. for st in range(self.num_states)]
-        self.setup_nodes_(node.left)
-        self.setup_nodes_(node.right)
 
     def calculate_expectations_(self, root):
         """
@@ -70,15 +59,32 @@ class PhyloTree:
             return
 
         # Given root, calculate expected left node and expected right node
-        left.expectations = [0. for state in tr_matrix.states]
-        right.expectations = [0. for state in tr_matrix.states]
-        for fr in tr_matrix.states:
-            for to in tr_matrix.states:
-                left.expectations[to] += self.sess.run(tr_matrix.tr_prob(fr, to, left.length)) * root[fr]
-                right.expectations[to] += self.sess.run(tr_matrix.tr_prob(fr, to, right.length)) * root[fr]
+        root.left.expectations = np.zeros([len(self.tr_matrix.states)])
+        root.right.expectations = np.zeros([len(self.tr_matrix.states)])
+        tr1 = self.sess.run(self.tr_matrix.tr_matrix(root.left.length))
+        tr2 = self.sess.run(self.tr_matrix.tr_matrix(root.right.length))
 
+        for fr in self.tr_matrix.states:
+            for to in self.tr_matrix.states:
+                fr_index = self.tr_matrix.states.index(fr)
+                to_index = self.tr_matrix.states.index(to)
+                root.left.expectations[to_index] += \
+                    tr1[fr_index, to_index] * root.expectations[fr_index]
+                root.right.expectations[to_index] += \
+                    tr2[fr_index, to_index] * root.expectations[fr_index]
+
+        # Check that we correctly calculated the matrix exponential
+        assert(abs(root.left.expectations.sum() - 1) < 0.01)
+        assert(abs(root.right.expectations.sum() - 1) < 0.01)
         self.calculate_expectations_(root.left)
         self.calculate_expectations_(root.right)
+
+
+    def compute_log_likelihood_(self):
+        """
+        Computes the expected complete log likelihood.
+        """
+        pass
 
     def maximize_log_likelihood_(self):
         """
@@ -94,6 +100,7 @@ class PhyloTree:
         nxt = 0
         while abs(nxt - prv) > 0.1:
             sess.run(train)
+
 
     def simulate(self, size):
         """
