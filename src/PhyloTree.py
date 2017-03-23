@@ -10,6 +10,8 @@ class Node:
         self.observations = observations
         
         self.expectations = None
+        # expected log likelihood for observations
+        self.log_likelihood = None
         self.left = None
         self.right = None
 
@@ -22,6 +24,7 @@ class PhyloTree:
         tr_matrix: transition matrix
         """
         self.root = root
+        assert root.left != None, "Trees must have at least one child node"
         self.check_tree_(root)
         self.tr_matrix = tr_matrix
 
@@ -31,6 +34,8 @@ class PhyloTree:
         self.num_states = len(tr_matrix.states)
         # This should be the initial distribution
         self.root.expectations = np.array([ 1. / self.num_states for st in tr_matrix.states ])
+        self.child_nodes = []
+        self.get_child_nodes_(self.root)
 
 
     def check_tree_(self, root):
@@ -48,11 +53,21 @@ class PhyloTree:
         self.check_tree_(root.right)
 
 
+    def get_child_nodes_(self, root):
+
+        if root.left.left == None:
+            self.child_nodes.append(root.left)
+            self.child_nodes.append(root.right)
+
+        
+        else:
+            self.get_child_nodes_(root.left)
+            self.get_child_nodes_(root.right)
+
+
     def calculate_expectations_(self, root):
         """
         Calculates the expected state of each ancestral node.
-        This isn't quite right. These expecations need to be evaluations
-        of graph.
         """
 
         if root.left == None or root.right == None:
@@ -80,26 +95,54 @@ class PhyloTree:
         self.calculate_expectations_(root.right)
 
 
-    def compute_log_likelihood_(self):
+    def compute_observation_likelihoods_(self, root):
         """
-        Computes the expected complete log likelihood.
+        Computes the tensorflow graph of the log likelihood.
         """
-        pass
+        # The current node is a parent of an observations
+        if root.left.left == None:
+            root.left.log_likelihood = 0
+            root.right.log_likelihood = 0
+            tr1 = self.tr_matrix.tr_matrix(root.left.length)
+            tr2 = self.tr_matrix.tr_matrix(root.right.length)
+            for fr in self.tr_matrix.states:
+                for to in self.tr_matrix.states:
+                    fr_index = self.tr_matrix.states.index(fr)
+                    to_index = self.tr_matrix.states.index(to)
+                    for i in range(len(root.left.observations)):
+                        if root.left.observations[i][0] == to[0]:
+                            #print("left", fr, to, root.left.observations[i])
+                            root.left.log_likelihood += tf.log(tr1[fr_index, to_index]) * root.expectations[fr_index]
+                        if root.right.observations[i][0] == to[0]:
+                            #print("right", fr, to, root.right.observations[i])
+                            root.right.log_likelihood += tf.log(tr2[fr_index, to_index]) * root.expectations[fr_index]
+        else:
+            compute_observation_likelihoods_(self, root.left)
+            compute_observation_likelihoods_(self, root.right)
+            
 
     def maximize_log_likelihood_(self):
         """
         Maximizes the expected complete log conditional.
         Maximization proceeds by gradient ascent.
         """
+        self.compute_observation_likelihoods_(self.root)
+        log_likelihood = 0
+        for node in self.child_nodes:
+            log_likelihood += node.log_likelihood
 
-        log_likelihood = 0 # calculate here
         optimizer = tf.train.GradientDescentOptimizer(0.01)
-        train = optimizer.minimize(-loss)
+        train = optimizer.minimize(-log_likelihood)
         
-        prv = sess.run(log_likelihood)
-        nxt = 0
-        while abs(nxt - prv) > 0.1:
-            sess.run(train)
+        prv = 0 
+        nxt = self.sess.run(log_likelihood)
+        it = 1
+        while abs(nxt - prv) > 0.001:
+            print("iteration: ", it, "\tlog_likelihood=", nxt)
+            prv = nxt
+            self.sess.run(train)
+            nxt = self.sess.run(log_likelihood)
+            it += 1
 
 
     def simulate(self, size):
@@ -156,3 +199,21 @@ class PhyloTree:
         self.sess = tf.Session()
         init = tf.global_variables_initializer()
         self.sess.run(init)
+
+        prv = np.zeros(4)
+        nxt = np.array(self.sess.run([self.tr_matrix.tr_rate, self.tr_matrix.tv_rate,
+                                      self.tr_matrix.on_rate, self.tr_matrix.off_rate]))
+        while abs((nxt - prv).sum()) > 0.01:
+            self.calculate_expectations_(self.root)
+            self.maximize_log_likelihood_()
+            prv = nxt
+            nxt = np.array(self.sess.run([self.tr_matrix.tr_rate, self.tr_matrix.tv_rate,
+                                          self.tr_matrix.on_rate, self.tr_matrix.off_rate]))
+            print(nxt)
+
+
+    def print_parameters(self):
+        print("tr_rate:\t", self.sess.run(self.tr_matrix.tr_rate))
+        print("tv_rate:\t", self.sess.run(self.tr_matrix.tv_rate))
+        print("on_rate:\t", self.sess.run(self.tr_matrix.on_rate))
+        print("off_rate:\t", self.sess.run(self.tr_matrix.off_rate))
