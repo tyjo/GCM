@@ -14,13 +14,14 @@ if __name__ == "__main__":
 
     # Build a phylogenetic tree
     m = tm.TransitionMatrix(0.2, 0.1, 0.3, 0.5)
-    root = tree.Node("root")
-    a1 = tree.Node("a1", 10)
-    a2 = tree.Node("a2", 10)
-    child1 = tree.Node("child1", 20, "AC")
-    child2 = tree.Node("child2", 20, "AC")
-    child3 = tree.Node("child3", 20, "TC")
-    child4 = tree.Node("child4", 20, "TC")
+    root = tree.Node("5")
+    a1 = tree.Node("6", 10)
+    a2 = tree.Node("7", 10)
+    child1 = tree.Node("1", 20, "AC")
+    child2 = tree.Node("2", 20, "AC")
+    child3 = tree.Node("3", 20, "TC")
+    child4 = tree.Node("4", 20, "TC")
+
     root.left = a1
     root.right = a2
     a1.left = child1

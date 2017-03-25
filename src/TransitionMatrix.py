@@ -53,7 +53,7 @@ class TransitionMatrix:
         self.tr_matrices = {}
 
         # rate matrix
-        self.Q = tf.pack([ [self.rate_matrix(s1, s2) for s2 in self.states] for s1 in self.states ], name="rate_matrix")
+        self.Q = tf.stack([ [self.rate_matrix(s1, s2) for s2 in self.states] for s1 in self.states ], name="rate_matrix")
 
 
     def off_diagional(self, fr, to):
@@ -128,13 +128,13 @@ class TransitionMatrix:
         """
         #if time in self.tr_matrices:
         #    return self.tr_matrices[time]
-
+        n=5
         t = tf.constant(time, dtype=tf.float64)
         ret = tf.eye(len(self.states), dtype=tf.float64, name="tr_matrix_" + str(time))
-        Q = self.Q / 1024
-        for i in range(1, 10):
+        Q = self.Q / pow(2,n)
+        for i in range(1, n):
             ret += self.matrix_power(Q, i)*tf.pow(t, i) / tf.constant(factorial(i), dtype=tf.float64)
-        ret = self.matrix_power(ret, 1024)
+        ret = self.matrix_power(ret, pow(2,n))
         self.tr_matrices[time] = ret
         return ret
 
