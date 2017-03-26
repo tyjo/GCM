@@ -42,7 +42,7 @@ class PhyloTree:
         # store the tensorflow session
         self.sess = None
         # the tensorflow graph of the expected complete log likelihood, prevents recomputation
-        self.log_likelihood = 0
+        self.log_likelihood = None
         # dictionary of placeholders to pass as feed_dict to session
         self.exp_placeholders = {}
         self.root.placeholder = tf.placeholder(tf.float64, self.num_states)
@@ -56,9 +56,9 @@ class PhyloTree:
             self.current_node=root
         else:
             if root.left != None:
-                find_node_by_name_(self,root.left,name)
+                self.find_node_by_name_(root.left,name)
             if root.right != None:
-                find_node_by_name_(self,root.right,name)
+                self.find_node_by_name_(root.right,name)
 
     def check_tree_(self, root):
         """
@@ -142,14 +142,7 @@ class PhyloTree:
         """
         Calculates the expected state of each ancestral node.
         """
-
-        if current_node == None:
-            tmp_sum_likelihood=0
-            for fr in self.tr_matrix.states:
-                fr_index = self.tr_matrix.states.index(fr)
-                tmp_sum_likelihood += self.root.likelihoods[fr_index]
-            self.log_likelihood=tf.log(tmp_sum_likelihood)
-            return
+        print ('root', root.name)
 
         # Given left and right likelihoods  calculate root likelihoode
         root.likelihoods = np.zeros([len(self.tr_matrix.states)])
@@ -162,17 +155,26 @@ class PhyloTree:
             fr_index = self.tr_matrix.states.index(fr)
             for to in self.tr_matrix.states:
                 to_index = self.tr_matrix.states.index(to)
+                print ('to  ', to, ' tr1 ', tr1[fr_index,to_index],' exp_to ',root.left.likelihoods[to_index])
                 tmp_left  += tr1[fr_index, to_index] * root.left.likelihoods[to_index]
                 tmp_right += tr2[fr_index, to_index] * root.right.likelihoods[to_index]
-            root.likelihoods[fr_index]=tmp_left*tmp_righ
+            print (fr, ' tmp_left ', tmp_left, ' tmp_right ',tmp_right)
+            root.likelihoods[fr_index]=tmp_left*tmp_right
 
         # Update the feed_dict to pass to Tensorflow
         self.exp_placeholders[root.placeholder] = root.likelihoods
+        
+        if root == self.root:
+            tmp_sum_likelihood=0
+            for fr in self.tr_matrix.states:
+                fr_index = self.tr_matrix.states.index(fr)
+                tmp_sum_likelihood += root.likelihoods[fr_index]*self.root.placeholder[fr_index]
+            self.log_likelihood=tf.log(tmp_sum_likelihood)#*self.root.placeholder[fr_index]
 
-        # Check that we correctly calculated the matrix exponential
-        assert(abs(root.likelihoods.sum() - 1) < 0.01)
-        self.find_node_by_name_(str(int(root.name)-1))
-        self.calculate_likelihoods_(self.current_node)
+        else:        
+            #assert(abs(root.likelihoods.sum() - 1) < 0.01)
+            self.find_node_by_name_(self.root,str(int(root.name)-1))
+            self.calculate_likelihoods_(self.current_node)
 
 
     def compute_observation_likelihoods_(self, root):
@@ -205,11 +207,12 @@ class PhyloTree:
             
     def compute_observation_likelihoods_pruning_(self,root,site_number):
         if root.left == None:
-            root.likelihoods = np.zeros([len(self.tr_matrix.states)])
+            tmp_root_likelihoods=np.zeros([len(self.tr_matrix.states)])
             for fr in self.tr_matrix.states:
                 fr_index = self.tr_matrix.states.index(fr)
                 if root.observations[site_number][0] == fr[0]:
-                    root.likelihoods[fr_index] = 1./8
+                    tmp_root_likelihoods[fr_index]=1./8.
+            root.likelihoods =tmp_root_likelihoods
         else:
             self.compute_observation_likelihoods_pruning_(root.left,site_number)
             self.compute_observation_likelihoods_pruning_(root.right,site_number)
@@ -288,13 +291,15 @@ class PhyloTree:
         """
 
         print("Building computation graph...")
+        self.current_node=self.root.right
         #self.compute_observation_likelihoods_(self.root)
-        self.compute_observation_likelihoods_pruning_(self.root,0) 
+        self.compute_observation_likelihoods_pruning_(self.root,0)
+        self.calculate_likelihoods_(self.current_node)
         #self.log_likelihood = 0
         #for node in self.child_nodes:
         #    self.log_likelihood += node.log_likelihood
         #self.train = self.optimizer.minimize(-self.log_likelihood)
-                
+    
         self.train = self.optimizer.minimize(-self.log_likelihood)
 
         self.sess = tf.Session()
@@ -312,7 +317,8 @@ class PhyloTree:
             print("iteration: ", it)
             print("\tE step...")
             #self.calculate_expectations_(self.root)
-            self.calucalte_likelihoods_(self.root)
+            self.current_node=self.root.right
+            self.calucalte_likelihoods_(self.current_node)
             print("\tM step...")
             #self.maximize_log_likelihood_()
             self.maximize_likelihood_()
