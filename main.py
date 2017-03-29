@@ -20,12 +20,12 @@ if __name__ == "__main__":
     
     # Build a phylogenetic tree
     root = tree.Node("5")
-    a1 = tree.Node("6", 0.1)
-    a2 = tree.Node("7", 0.1)
-    child1 = tree.Node("1", 0.2, "AC")
-    child2 = tree.Node("2", 0.2, "AC")
-    child3 = tree.Node("3", 0.2, "TC")
-    child4 = tree.Node("4", 0.2, "TC")
+    a1 = tree.Node("6", 3)
+    a2 = tree.Node("7", 2)
+    child1 = tree.Node("1", 1, "AC")
+    child2 = tree.Node("2", 1, "AC")
+    child3 = tree.Node("3", 2, "TC")
+    child4 = tree.Node("4", 2, "TC")
 
     root.left = a1
     root.right = a2
@@ -36,7 +36,7 @@ if __name__ == "__main__":
     phylo_tree = tree.PhyloTree(root, m)
 
     # Simulate a sequence of length 3
-    #phylo_tree.simulate(3)
+    phylo_tree.simulate(3)
 
     # Estimate the parameters of the model given observations AC and TC above
     phylo_tree.estimate()
