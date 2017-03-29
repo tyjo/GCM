@@ -102,7 +102,9 @@ class PhyloTree:
         print ('root', root.name)
 
         # Given left and right likelihoods  calculate root likelihoode
-        tmp_for_root_likelihoods=[0 for i in range(len(self.tr_matrix.states))]
+
+        tmp_for_root_likelihoods=[0. for i in range(len(self.tr_matrix.states))]
+
         #tr1 = self.sess.run(self.tr_matrix.tr_matrix(root.left.length))
         #tr2 = self.sess.run(self.tr_matrix.tr_matrix(root.right.length))
         tr1 = self.tr_matrix.tr_matrix(root.left.length)
@@ -174,6 +176,7 @@ class PhyloTree:
         nxt = np.array(self.sess.run([self.tr_matrix.tr_rate, self.tr_matrix.tv_rate,
                                       self.tr_matrix.on_rate, self.tr_matrix.off_rate]))
         print (nxt)
+
         self.sess.run(self.train)
         nxt = self.sess.run(self.log_likelihood)
         print (nxt)
@@ -182,4 +185,4 @@ class PhyloTree:
         print("tv_rate:\t", self.sess.run(self.tr_matrix.tv_rate))
         print("on_rate:\t", self.sess.run(self.tr_matrix.on_rate))
         print("off_rate:\t", self.sess.run(self.tr_matrix.off_rate))
-    
+        
