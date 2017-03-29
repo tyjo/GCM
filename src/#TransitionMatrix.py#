@@ -91,7 +91,9 @@ class TransitionMatrix:
         diag = tf.constant(0, dtype=tf.float64)
         for state in self.states:
             if state != fr:
-                diag += self.off_diagional(fr, state)
+                diag += sel
+
+f.off_diagional(fr, state)
         return -diag
 
 
@@ -121,13 +123,14 @@ class TransitionMatrix:
         ret = tf.matmul(ret, sqr)
         return ret
 
+
     def tr_matrix(self, time):
         """
         Compute the Tensorflow graph for e^{Qt} for t = time and stores the result.
         """
         #if time in self.tr_matrices:
         #    return self.tr_matrices[time]
-        n=3
+        n=5
         t = tf.constant(time, dtype=tf.float64)
         ret = tf.eye(len(self.states), dtype=tf.float64, name="tr_matrix_" + str(time))
         Q = self.Q / pow(2,n)
@@ -136,7 +139,6 @@ class TransitionMatrix:
         ret = self.matrix_power(ret, pow(2,n))
         self.tr_matrices[time] = ret
         return ret
-
 
 
     def tr_prob(self, fr, to, time):
