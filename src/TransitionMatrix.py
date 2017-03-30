@@ -17,6 +17,9 @@ class TransitionMatrix:
         # switch ON/OFF rate
         self.off_rate = tf.Variable(off_rate, dtype=tf.float64, name="off_rate")
 
+        #nucleotide states
+        self.nucl_states = "ACGT"
+        
         # states
         self.states = ["A000", "A100", "A010", "A001", "A110", "A101", "A011", "A111",
                        "C000", "C100", "C010", "C001", "C110", "C101", "C011", "C111",
@@ -63,11 +66,19 @@ class TransitionMatrix:
         assert(fr != to)
         # Transition
         if fr[0] != to[0] and fr[1:] == to[1:] and self.transitions[fr[0]] == to[0]:
-            return self.tr_rate
+            if (self.nucl_states.find(to[0]) < self.nucl_states.find(fr[0])):
+                index = self.nucl_states.find(to[0])
+            else:
+                index = self.nucl_states.find(to[0])-1
+            return int(fr[1:][index])*self.tr_rate
 
         # Transversion
         elif fr[0] != to[0] and fr[1:] == to[1:] and self.transitions[fr[0]] != to[0]:
-            return self.tv_rate
+            if (self.nucl_states.find(to[0]) < self.nucl_states.find(fr[0])):
+                index = self.nucl_states.find(to[0])
+            else:
+                index = self.nucl_states.find(to[0])-1
+            return int(fr[1:][index])*self.tv_rate
 
         # OFF => ON
         elif fr[0] == to[0] and to[1:] in self.on_switch[fr[1:]]:

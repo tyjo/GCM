@@ -5,19 +5,18 @@ import src.PhyloTree as tree
 if __name__ == "__main__":
     # Build transition matrix and compute
     m = tm.TransitionMatrix(0.2, 0.1, 0.3, 0.5)
-    print (m)
-    p1 = m.tr_matrix(10)
-    p2 = m.tr_matrix(20)
+    p1 = m.tr_matrix(1)
+    p2 = m.tr_matrix(2)
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
-    print(sess.run(p1))
-    print(sess.run(p2))
-    
-    #tr1 = sess.run(tf.reduce_sum(p1))
-    #print (tr1)
-    #train=tf.train.GradientDescentOptimizer(0.01).minimize(tf.reduce_sum(m.tr_matrix(10)))
-    #print ("train ", train)
-    
+
+    with open('Q.txt', 'w') as file:
+        file.writelines('\t'.join(str(j) for j in i) + '\n' for i in sess.run(m.Q))
+    with open('tr_1.txt', 'w') as file:
+        file.writelines('\t'.join(str(j) for j in i) + '\n' for i in sess.run(p1))
+    with open('tr_2.txt', 'w') as file:
+        file.writelines('\t'.join(str(j) for j in i) + '\n' for i in sess.run(p2))
+
     # Build a phylogenetic tree
     root = tree.Node("5")
     a1 = tree.Node("6", 3)
@@ -36,7 +35,7 @@ if __name__ == "__main__":
     phylo_tree = tree.PhyloTree(root, m)
 
     # Simulate a sequence of length 3
-    phylo_tree.simulate(3)
+    phylo_tree.simulate(5)
 
     # Estimate the parameters of the model given observations AC and TC above
     phylo_tree.estimate()
