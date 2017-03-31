@@ -8,13 +8,28 @@ class Node:
         self.name = name
         self.length = length
         self.observations = observations
-        
-        self.expectations = None
-        self.placeholder = None
-        # expected log likelihood for observations
-        self.log_likelihood = None
         self.left = None
         self.right = None
+    
+
+        # Probability of observations p(X|Node) that descended from the current
+        # node. We use this in the bottom up part  of the calculation for 
+        # expectations. Left descendants are those that are direct descendants
+        # of the node. Right  descendants are those observations that are not 
+        # directly below the node. The root node is an exception, where left
+        # decendants and right decendants are true descendants.
+        self.prob_left_descendants_ = None
+        self.prob_right_descendants_ = None
+
+        # Numerical conditional expectation of the node given observations and
+        # current parameter values.
+        self.expectations_ = None
+
+        # Placeholders for expectations to pass to Tensorflow for maximizing 
+        # the expected complete log likelihood.
+        self.placeholders_ = None
+
+
 
 
 class PhyloTree:
@@ -28,25 +43,23 @@ class PhyloTree:
         assert root.left != None, "Trees must have at least one child node"
         
         self.tr_matrix = tr_matrix
-        self.num_states = len(tr_matrix.states)
-        self.child_nodes = []
-        self.get_child_nodes_(self.root)
+        self.num_states = len(self.tr_matrix.states)
         self.check_tree_(root)
-        self.setup_(self.root)
+        self.num_obs = 0 # The length of the observed sequence in leaf nodes
         # This should be the initial distribution
-        self.root.expectations = np.array([ 1. / self.num_states for st in tr_matrix.states ])
+        self.initial_distribution = np.array([ 1. / self.num_states for st in tr_matrix.states ])
 
         ## Tensorflow parameters
-        # store the tensorflow session
         self.sess = None
         # the tensorflow graph of the expected complete log likelihood, prevents recomputation
         self.log_likelihood = None
-        # dictionary of placeholders to pass as feed_dict to session
-        self.exp_placeholders = {}
-        self.root.placeholder = tf.placeholder(tf.float64, self.num_states)
-        self.exp_placeholders[self.root.placeholder] = self.root.expectations
+        # dictionary of placeholders to pass expected values to session as feed_dict
+        self.expected_value_ph = {}
+        # numerical optimization routine
         self.optimizer = tf.train.GradientDescentOptimizer(0.01)
         self.train = None
+
+        self.setup_(self.root)
 
 
     def check_tree_(self, root):
@@ -73,89 +86,176 @@ class PhyloTree:
         if root == None:
             return
 
-        elif root.left != None:
-            root.right.placeholder = tf.placeholder(tf.float64, shape=self.num_states)
-            root.left.placeholder = tf.placeholder(tf.float64, shape=self.num_states)
+        root.placeholders_ = tf.placeholder(tf.float64, shape=self.num_states)
+        
+        if self.is_leaf_node(root) and self.num_obs == 0:
+            self.num_obs = len(root.observations)
+            
+        elif self.is_leaf_node(root) and self.num_obs == 0:
+            self.num_obs = len(root.observations)
+
+        elif self.is_leaf_node(root) == None and self.num_obs != len(root.observations):
+            raise AssertionError("Leaf nodes must all have the same number of observations")
 
         self.setup_(root.left)
         self.setup_(root.right)
 
 
-    def get_child_nodes_(self, root):
+    def get_leaf_nodes_(self, root):
         """
         Makes a list of leaf nodes.
         """
         if root.left.left == None:
-            self.child_nodes.append(root.left)
-            self.child_nodes.append(root.right)
+            self.leaf_nodes.append(root.left)
+            self.leaf_nodes.append(root.right)
 
         else:
-            self.get_child_nodes_(root.left)
-            self.get_child_nodes_(root.right)
+            self.get_leaf_nodes_(root.left)
+            self.get_leaf_nodes_(root.right)
+
+
+    def is_leaf_node(self, node):
+        return node.left == None
 
 
     def calculate_expectations_(self, root):
         """
         Calculates the expected state of each ancestral node.
         """
+        def bottom_up(root):
+            """
+            Computes p(X | node) for descendents X. See Node class
+            for description of left and right descendants
+            """
+            root.prob_left_descendants_ = np.zeros((self.num_obs, self.num_states))
 
-        if root.left == None:
-            return
+            if self.is_leaf_node(root.left):
+                t1 = root.left.length
+                t2 = root.right.length
 
-        # Given root, calculate expected left node and expected right node
-        root.left.expectations = np.zeros([len(self.tr_matrix.states)])
-        root.right.expectations = np.zeros([len(self.tr_matrix.states)])
-        tr1 = self.sess.run(self.tr_matrix.tr_matrix(root.left.length))
-        tr2 = self.sess.run(self.tr_matrix.tr_matrix(root.right.length))
+                if t1 in tr_matrices:
+                    m1 = tr_matrices[t1]
+                else:
+                    tr_matrices[t1] = m1 = self.sess.run(self.tr_matrix.tr_matrix(t1))
 
-        for fr in self.tr_matrix.states:
-            for to in self.tr_matrix.states:
-                fr_index = self.tr_matrix.states.index(fr)
-                to_index = self.tr_matrix.states.index(to)
-                root.left.expectations[to_index] += \
-                    tr1[fr_index, to_index] * root.expectations[fr_index]
-                root.right.expectations[to_index] += \
-                    tr2[fr_index, to_index] * root.expectations[fr_index]
+                if t1 in tr_matrices:
+                    m2 = tr_matrices[t2]
+                else:
+                    tr_matrices[t2] = m2 = self.sess.run(self.tr_matrix.tr_matrix(t2))
 
-        # Update the feed_dict to pass to Tensorflow
-        self.exp_placeholders[root.left.placeholder] = root.left.expectations
-        self.exp_placeholders[root.right.placeholder] = root.right.expectations
+                for i in range(self.num_obs):
+                    for fr in range(self.num_states):
+                        prob_left = 0
+                        prob_right = 0
+                        for to in range(self.num_states):
+                            if self.tr_matrix.states[to][0] == root.left.observations[i]:
+                                prob_left += m1[fr][to]
+                            if self.tr_matrix.states[to][0] == root.right.observations[i]:
+                                prob_right += m2[fr][to]
+                        root.prob_left_descendants_[i][fr] = prob_left * prob_right
 
-        # Check that we correctly calculated the matrix exponential
-        assert(abs(root.left.expectations.sum() - 1) < 0.01)
-        assert(abs(root.right.expectations.sum() - 1) < 0.01)
-        self.calculate_expectations_(root.left)
-        self.calculate_expectations_(root.right)
+            else:
+                bottom_up(root.left)
+                bottom_up(root.right)
+
+                t1 = root.left.length
+                t2 = root.right.length
+                if t1 in tr_matrices:
+                    m1 = tr_matrices[t1]
+                else:
+                    tr_matrices[t1] = m1 = self.sess.run(self.tr_matrix.tr_matrix(t1))
+
+                if t1 in tr_matrices:
+                    m2 = tr_matrices[t2]
+                else:
+                    tr_matrices[t2] = m2 = self.sess.run(self.tr_matrix.tr_matrix(t2))
+
+                for i in range(self.num_obs):
+                    #v_L = root.left.prob_left_descendants_[i]
+                    #v_R = root.right.prob_left_descendants_[i]
+                    for fr in range(self.num_states):
+                        assert abs(m1[fr].sum() - 1) < 0.01, "Bad transition matrix"
+                        x = root.left.prob_left_descendants_[i] * m1[fr]
+                        y = root.right.prob_left_descendants_[i] * m2[fr]
+                        root.prob_left_descendants_[i][fr] = x.dot(np.eye(self.num_states).dot(y.T))
 
 
-    def compute_observation_likelihoods_(self, root):
+        def top_down(node):
+            """
+            Computes expecations of left and right children after call to bottom_up.
+            """
+            # Compute expectations for left node
+            if self.is_leaf_node(node.left):
+                return
+
+            assert(node.expectations_ != None)
+            assert(node.left.prob_left_descendants_ != None)
+            assert(node.right.prob_left_descendants_ != None)
+            t1 = root.left.length
+            t2 = root.right.length
+            m1 = tr_matrices[t1]
+            m2 = tr_matrices[t2]
+            node.left.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
+            node.right.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
+            node.left.expectations_ = np.zeros((self.num_obs, self.num_states))
+            node.right.expectations_ = np.zeros((self.num_obs, self.num_states))
+            for i in range(self.num_obs):
+                node.left.prob_right_descendants_[i] = tr_matrices[root.left.length].dot(node.prob_right_descendants_[i])
+                node.left.expectations_[i] = node.left.prob_left_descendants_[i] * node.left.prob_right_descendants_[i] * tr_matrices[root.left.length].dot(node.expectations_[i])
+                node.left.expectations_[i] /= node.left.expectations_[i].sum()
+                self.expected_value_ph[node.left.placeholders_[i]] = node.left.expectations_[i]
+
+                node.right.prob_right_descendants_[i] = tr_matrices[root.right.length].dot(node.prob_right_descendants_[i])
+                node.right.expectations_[i] = node.right.prob_right_descendants_[i] * node.right.prob_right_descendants_[i] * tr_matrices[root.right.length].dot(node.expectations_[i])
+                node.right.expectations_[i] /= node.right.expectations_[i].sum()
+                self.expected_value_ph[node.right.placeholders_[i]] = node.right.expectations_[i]
+
+            if not self.is_leaf_node(root.left):
+                top_down(node.left)
+                top_down(node.right)
+        
+        # Save computed transition matrices. Dictionary
+        # from time to np.array.
+        tr_matrices = {}
+        bottom_up(root)
+        root.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
+        t1 = root.left.length
+        t2 = root.right.length
+        m1 = tr_matrices[t1]
+        m2 = tr_matrices[t2]
+        root.left.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
+        root.right.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
+        root.expectations_ = np.zeros((self.num_obs, self.num_states))
+        root.left.expectations_ = np.zeros((self.num_obs, self.num_states))
+        root.right.expectations_ = np.zeros((self.num_obs, self.num_states))
+        for i in range(self.num_obs):
+            root.prob_right_descendants_[i] = tr_matrices[root.right.length].dot(root.right.prob_left_descendants_[i])
+            root.expectations_[i] = root.prob_left_descendants_[i] * root.prob_right_descendants_[i] * self.initial_distribution
+            root.expectations_[i] /= root.expectations_[i].sum()
+            self.expected_value_ph[root.placeholders_[i]] = root.expectations_[i]
+
+            root.left.prob_right_descendants_[i] = tr_matrices[root.left.length].dot(root.prob_right_descendants_[i])
+            root.left.expectations_[i] = root.left.prob_left_descendants_[i] * root.left.prob_right_descendants_[i] * tr_matrices[root.left.length].dot(root.expectations_[i])
+            root.left.expectations_[i] /= root.left.expectations_[i].sum()
+            self.expected_value_ph[root.left.placeholders_[i]] = root.left.expectations_[i]
+
+            root.right.prob_right_descendants_[i] = tr_matrices[root.right.length].dot(root.prob_left_descendants_[i])
+            root.right.expectations_[i] = root.right.prob_right_descendants_[i] * root.right.prob_right_descendants_[i] * tr_matrices[root.right.length].dot(root.expectations_[i])
+            root.right.expectations_[i] /= root.right.expectations_[i].sum()
+            self.expected_value_ph[root.right.placeholders_[i]] = root.right.expectations_[i]
+
+        top_down(root.left)
+        top_down(root.right)
+
+
+    def compute_complete_log_likelihood_(self, root):
         """
-        Computes the tensorflow graph of the log likelihood.
-        Only need to do this once.
+        Computes the graph corresponding to the complete log likelihood and
+        stores it in self.log_likelihood
         """
-        # The current node is a parent of an observations
-        if root.left.left == None:
-            root.left.log_likelihood = 0
-            root.right.log_likelihood = 0
-            tr1 = self.tr_matrix.tr_matrix(root.left.length)
-            tr2 = self.tr_matrix.tr_matrix(root.right.length)
-            for fr in self.tr_matrix.states:
-                for to in self.tr_matrix.states:
-                    fr_index = self.tr_matrix.states.index(fr)
-                    to_index = self.tr_matrix.states.index(to)
-                    for i in range(len(root.left.observations)):
-                        if root.left.observations[i][0] == to[0]:
-                            #print("left", fr, to, root.left.observations[i])
-                            root.left.log_likelihood += tf.log(tr1[fr_index, to_index]) * \
-                                                        root.placeholder[fr_index]
-                        if root.right.observations[i][0] == to[0]:
-                            #print("right", fr, to, root.right.observations[i])
-                            root.right.log_likelihood += tf.log(tr2[fr_index, to_index]) * \
-                                                         root.placeholder[fr_index]
-        else:
-            self.compute_observation_likelihoods_(root.left)
-            self.compute_observation_likelihoods_(root.right)
-            
+        pass
+
+
 
     def maximize_log_likelihood_(self):
         """
@@ -163,13 +263,13 @@ class PhyloTree:
         Maximization proceeds by gradient ascent.
         """
         prv = 0
-        nxt = self.sess.run(self.log_likelihood, feed_dict=self.exp_placeholders)
+        nxt = self.sess.run(self.log_likelihood, feed_dict=self.expected_value_ph)
         it = 1
         while abs(nxt - prv) > 0.1:
             print("\tlog_likelihood =", nxt)
             prv = nxt
-            self.sess.run(self.train, feed_dict=self.exp_placeholders)
-            nxt = self.sess.run(self.log_likelihood, feed_dict=self.exp_placeholders)
+            self.sess.run(self.train, feed_dict=self.expected_value_ph)
+            nxt = self.sess.run(self.log_likelihood, feed_dict=self.expected_value_ph)
             it += 1
 
 
@@ -213,10 +313,10 @@ class PhyloTree:
         init = tf.global_variables_initializer()
         self.sess.run(init)
 
-        self.root.observations = []
-        for i in range(size):
-            index = np.random.multinomial(1, self.root.expectations).argmax()
-            self.root.observations.append(self.tr_matrix.states[index])
+        #self.root.observations = []
+        #for i in range(size):
+        #    index = np.random.multinomial(1, self.root.expectations).argmax()
+        #    self.root.observations.append(self.tr_matrix.states[index])
 
         print("{}\t{}".format(self.root.name, self.root.observations))
         
@@ -231,8 +331,14 @@ class PhyloTree:
         """
 
         print("Building computation graph...")
-        self.compute_observation_likelihoods_(self.root)
-        self.log_likelihood = 0
+        self.sess = tf.Session()
+        init = tf.global_variables_initializer()
+        self.sess.run(init)
+        self.calculate_expectations_(self.root)
+        return
+
+        #self.compute_observation_likelihoods_(self.root)
+        #self.log_likelihood = 0
         for node in self.child_nodes:
             self.log_likelihood += node.log_likelihood
         self.train = self.optimizer.minimize(-self.log_likelihood)
