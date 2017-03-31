@@ -23,6 +23,9 @@ class TransitionMatrix:
                        "G000", "G100", "G010", "G001", "G110", "G101", "G011", "G111",
                        "T000", "T100", "T010", "T001", "T110", "T101", "T011", "T111"]
 
+        #nucleotide states
+        self.nucl_states = "ACGT"
+
         # valid transitions
         self.transitions = {"A": "G",
                             "G": "A",
@@ -61,13 +64,22 @@ class TransitionMatrix:
         Returns off diagional entries (fr, to) in the rate matrix.
         """
         assert(fr != to)
+
         # Transition
         if fr[0] != to[0] and fr[1:] == to[1:] and self.transitions[fr[0]] == to[0]:
-            return self.tr_rate
+            if (self.nucl_states.find(to[0]) < self.nucl_states.find(fr[0])):
+                index = self.nucl_states.find(to[0])
+            else:
+                index = self.nucl_states.find(to[0])-1
+            return int(fr[1:][index])*self.tr_rate
 
         # Transversion
         elif fr[0] != to[0] and fr[1:] == to[1:] and self.transitions[fr[0]] != to[0]:
-            return self.tv_rate
+            if (self.nucl_states.find(to[0]) < self.nucl_states.find(fr[0])):
+                index = self.nucl_states.find(to[0])
+            else:
+                index = self.nucl_states.find(to[0])-1
+            return int(fr[1:][index])*self.tv_rate
 
         # OFF => ON
         elif fr[0] == to[0] and to[1:] in self.on_switch[fr[1:]]:
@@ -126,15 +138,15 @@ class TransitionMatrix:
         """
         Compute the Tensorflow graph for e^{Qt} for t = time and stores the result.
         """
-        #if time in self.tr_matrices:
-        #    return self.tr_matrices[time]
+        if time in self.tr_matrices:
+            return self.tr_matrices[time]
 
         t = tf.constant(time, dtype=tf.float64)
         ret = tf.eye(len(self.states), dtype=tf.float64, name="tr_matrix_" + str(time))
-        Q = self.Q / 1024
+        Q = self.Q / 128
         for i in range(1, 10):
             ret += self.matrix_power(Q, i)*tf.pow(t, i) / tf.constant(factorial(i), dtype=tf.float64)
-        ret = self.matrix_power(ret, 1024)
+        ret = self.matrix_power(ret, 128)
         self.tr_matrices[time] = ret
         return ret
 
