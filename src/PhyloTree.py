@@ -44,21 +44,21 @@ class PhyloTree:
         
         self.tr_matrix = tr_matrix
         self.num_states = len(self.tr_matrix.states)
-        self.check_tree_(root)
         self.num_obs = 0 # The length of the observed sequence in leaf nodes
-        # This should be the initial distribution
+        # The initial distribution
         self.initial_distribution = np.array([ 1. / self.num_states for st in tr_matrix.states ])
 
         ## Tensorflow parameters
         self.sess = None
-        # the tensorflow graph of the expected complete log likelihood, prevents recomputation
-        self.log_likelihood = None
-        # dictionary of placeholders to pass expected values to session as feed_dict
+        # The tensorflow graph of the expected complete log likelihood, prevents recomputation
+        self.log_likelihood = 0
+        # Dictionary of placeholders to pass expected values to session as feed_dict
         self.expected_value_ph = {}
-        # numerical optimization routine
+        # Numerical optimization routine
         self.optimizer = tf.train.GradientDescentOptimizer(0.01)
         self.train = None
 
+        self.check_tree_(root)
         self.setup_(self.root)
 
 
@@ -74,6 +74,15 @@ class PhyloTree:
              root.left != None and root.right == None:
              raise AssertionError("Leaf nodes must have 0 children.")
 
+        if self.is_leaf_node(root) and self.num_obs == 0:
+                self.num_obs = len(root.observations)
+                
+        elif self.is_leaf_node(root) and self.num_obs == 0:
+                self.num_obs = len(root.observations)
+
+        elif self.is_leaf_node(root) == None and self.num_obs != len(root.observations):
+                raise AssertionError("Leaf nodes must all have the same number of observations")
+
         self.check_tree_(root.left)
         self.check_tree_(root.right)
 
@@ -83,20 +92,14 @@ class PhyloTree:
         Set up tensorflow placeholders to pass to maximization routine.
         These placeholders are initialized to expectations.
         """
-        if root == None:
+
+        if root.left == None:
             return
 
-        root.placeholders_ = tf.placeholder(tf.float64, shape=self.num_states)
+        root.placeholders_ = []
+        for i in range(self.num_obs):
+            root.placeholders_.append(tf.placeholder(tf.float64, shape=(self.num_states, 1)))
         
-        if self.is_leaf_node(root) and self.num_obs == 0:
-            self.num_obs = len(root.observations)
-            
-        elif self.is_leaf_node(root) and self.num_obs == 0:
-            self.num_obs = len(root.observations)
-
-        elif self.is_leaf_node(root) == None and self.num_obs != len(root.observations):
-            raise AssertionError("Leaf nodes must all have the same number of observations")
-
         self.setup_(root.left)
         self.setup_(root.right)
 
@@ -203,12 +206,12 @@ class PhyloTree:
                 node.left.prob_right_descendants_[i] = tr_matrices[root.left.length].dot(node.prob_right_descendants_[i])
                 node.left.expectations_[i] = node.left.prob_left_descendants_[i] * node.left.prob_right_descendants_[i] * tr_matrices[root.left.length].dot(node.expectations_[i])
                 node.left.expectations_[i] /= node.left.expectations_[i].sum()
-                self.expected_value_ph[node.left.placeholders_[i]] = node.left.expectations_[i]
+                self.expected_value_ph[node.left.placeholders_[i]] = node.left.expectations_[i].reshape(self.num_states, 1)
 
                 node.right.prob_right_descendants_[i] = tr_matrices[root.right.length].dot(node.prob_right_descendants_[i])
                 node.right.expectations_[i] = node.right.prob_right_descendants_[i] * node.right.prob_right_descendants_[i] * tr_matrices[root.right.length].dot(node.expectations_[i])
                 node.right.expectations_[i] /= node.right.expectations_[i].sum()
-                self.expected_value_ph[node.right.placeholders_[i]] = node.right.expectations_[i]
+                self.expected_value_ph[node.right.placeholders_[i]] = node.right.expectations_[i].reshape(self.num_states,1)
 
             if not self.is_leaf_node(root.left):
                 top_down(node.left)
@@ -232,17 +235,17 @@ class PhyloTree:
             root.prob_right_descendants_[i] = tr_matrices[root.right.length].dot(root.right.prob_left_descendants_[i])
             root.expectations_[i] = root.prob_left_descendants_[i] * root.prob_right_descendants_[i] * self.initial_distribution
             root.expectations_[i] /= root.expectations_[i].sum()
-            self.expected_value_ph[root.placeholders_[i]] = root.expectations_[i]
+            self.expected_value_ph[root.placeholders_[i]] = root.expectations_[i].reshape(self.num_states, 1)
 
             root.left.prob_right_descendants_[i] = tr_matrices[root.left.length].dot(root.prob_right_descendants_[i])
             root.left.expectations_[i] = root.left.prob_left_descendants_[i] * root.left.prob_right_descendants_[i] * tr_matrices[root.left.length].dot(root.expectations_[i])
             root.left.expectations_[i] /= root.left.expectations_[i].sum()
-            self.expected_value_ph[root.left.placeholders_[i]] = root.left.expectations_[i]
+            self.expected_value_ph[root.left.placeholders_[i]] = root.left.expectations_[i].reshape(self.num_states, 1)
 
             root.right.prob_right_descendants_[i] = tr_matrices[root.right.length].dot(root.prob_left_descendants_[i])
             root.right.expectations_[i] = root.right.prob_right_descendants_[i] * root.right.prob_right_descendants_[i] * tr_matrices[root.right.length].dot(root.expectations_[i])
             root.right.expectations_[i] /= root.right.expectations_[i].sum()
-            self.expected_value_ph[root.right.placeholders_[i]] = root.right.expectations_[i]
+            self.expected_value_ph[root.right.placeholders_[i]] = root.right.expectations_[i].reshape(self.num_states, 1)
 
         top_down(root.left)
         top_down(root.right)
@@ -253,7 +256,29 @@ class PhyloTree:
         Computes the graph corresponding to the complete log likelihood and
         stores it in self.log_likelihood
         """
-        pass
+        def compute_helper(root, expectations):
+            """
+            root: the node whose complete log likelihood is to be computed
+            expecations: placeholders giving expected values of parent node
+            """
+            if self.is_leaf_node(root):
+                for i in range(self.num_obs):
+                    for fr in range(self.num_states):
+                        prob = 0
+                        for to in range(self.num_states):
+                            if self.tr_matrix.states[to][0] == root.observations[i]:
+                                prob += self.tr_matrix.tr_matrix(root.length)[fr][to]
+                        self.log_likelihood += expectations[i][fr] * tf.log(prob)
+
+            else:
+                log_prob = tf.log(self.tr_matrix.tr_matrix(root.length))
+                for i in range(self.num_obs):
+                    self.log_likelihood += tf.reduce_sum(tf.matmul(log_prob,expectations[i]))
+                    compute_helper(root.left, root.placeholders_)
+                    compute_helper(root.right, root.placeholders_)
+
+        compute_helper(root.left, root.placeholders_)
+        compute_helper(root.right, root.placeholders_)
 
 
 
@@ -331,22 +356,11 @@ class PhyloTree:
         """
 
         print("Building computation graph...")
+        self.compute_complete_log_likelihood_(self.root)
         self.sess = tf.Session()
         init = tf.global_variables_initializer()
         self.sess.run(init)
-        self.calculate_expectations_(self.root)
-        return
-
-        #self.compute_observation_likelihoods_(self.root)
-        #self.log_likelihood = 0
-        for node in self.child_nodes:
-            self.log_likelihood += node.log_likelihood
         self.train = self.optimizer.minimize(-self.log_likelihood)
-
-
-        self.sess = tf.Session()
-        init = tf.global_variables_initializer()
-        self.sess.run(init)
         #writer = tf.summary.FileWriter("log", graph=tf.get_default_graph())
 
         prv = np.zeros(4)
