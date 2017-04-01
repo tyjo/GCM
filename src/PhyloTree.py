@@ -55,7 +55,7 @@ class PhyloTree:
         # Dictionary of placeholders to pass expected values to session as feed_dict
         self.expected_value_ph = {}
         # Numerical optimization routine
-        self.optimizer = tf.train.GradientDescentOptimizer(0.01)
+        self.optimizer = tf.train.GradientDescentOptimizer(0.0001)
         self.train = None
 
         self.check_tree_(root)
@@ -140,7 +140,6 @@ class PhyloTree:
                     m1 = tr_matrices[t1]
                 else:
                     tr_matrices[t1] = m1 = self.sess.run(self.tr_matrix.tr_matrix(t1))
-
                 if t1 in tr_matrices:
                     m2 = tr_matrices[t2]
                 else:
@@ -174,20 +173,17 @@ class PhyloTree:
                     tr_matrices[t2] = m2 = self.sess.run(self.tr_matrix.tr_matrix(t2))
 
                 for i in range(self.num_obs):
-                    #v_L = root.left.prob_left_descendants_[i]
-                    #v_R = root.right.prob_left_descendants_[i]
                     for fr in range(self.num_states):
                         assert abs(m1[fr].sum() - 1) < 0.01, "Bad transition matrix"
                         x = root.left.prob_left_descendants_[i] * m1[fr]
                         y = root.right.prob_left_descendants_[i] * m2[fr]
-                        root.prob_left_descendants_[i][fr] = x.dot(np.eye(self.num_states).dot(y.T))
+                        root.prob_left_descendants_[i][fr] = x.T.dot(np.eye(self.num_states).dot(y))
 
 
         def top_down(node):
             """
             Computes expecations of left and right children after call to bottom_up.
             """
-            # Compute expectations for left node
             if self.is_leaf_node(node.left):
                 return
 
@@ -209,7 +205,7 @@ class PhyloTree:
                 self.expected_value_ph[node.left.placeholders_[i]] = node.left.expectations_[i].reshape(self.num_states, 1)
 
                 node.right.prob_right_descendants_[i] = tr_matrices[root.right.length].dot(node.prob_right_descendants_[i])
-                node.right.expectations_[i] = node.right.prob_right_descendants_[i] * node.right.prob_right_descendants_[i] * tr_matrices[root.right.length].dot(node.expectations_[i])
+                node.right.expectations_[i] = node.right.prob_left_descendants_[i] * node.right.prob_right_descendants_[i] * tr_matrices[root.right.length].dot(node.expectations_[i])
                 node.right.expectations_[i] /= node.right.expectations_[i].sum()
                 self.expected_value_ph[node.right.placeholders_[i]] = node.right.expectations_[i].reshape(self.num_states,1)
 
@@ -217,22 +213,34 @@ class PhyloTree:
                 top_down(node.left)
                 top_down(node.right)
         
-        # Save computed transition matrices. Dictionary
-        # from time to np.array.
+        # Save computed transition matrices. Dictionary from time to np.array.
         tr_matrices = {}
-        bottom_up(root)
-        root.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
+        bottom_up(root.left)
+        bottom_up(root.right)
         t1 = root.left.length
         t2 = root.right.length
-        m1 = tr_matrices[t1]
-        m2 = tr_matrices[t2]
+        if t1 in tr_matrices:
+            m1 = tr_matrices[t1]
+        else:
+            tr_matrices[t1] = m1 = self.sess.run(self.tr_matrix.tr_matrix(t1))
+
+        if t1 in tr_matrices:
+            m2 = tr_matrices[t2]
+        else:
+            tr_matrices[t2] = m2 = self.sess.run(self.tr_matrix.tr_matrix(t2))
+
+        root.prob_left_descendants_ = np.zeros((self.num_obs, self.num_states))
+        root.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
         root.left.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
         root.right.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
         root.expectations_ = np.zeros((self.num_obs, self.num_states))
         root.left.expectations_ = np.zeros((self.num_obs, self.num_states))
         root.right.expectations_ = np.zeros((self.num_obs, self.num_states))
+
         for i in range(self.num_obs):
-            root.prob_right_descendants_[i] = tr_matrices[root.right.length].dot(root.right.prob_left_descendants_[i])
+            print(self.tr_matrix.states)
+            root.prob_left_descendants_[i] = m1.dot(root.left.prob_left_descendants_[i])
+            root.prob_right_descendants_[i] = m2.dot(root.right.prob_left_descendants_[i])
             root.expectations_[i] = root.prob_left_descendants_[i] * root.prob_right_descendants_[i] * self.initial_distribution
             root.expectations_[i] /= root.expectations_[i].sum()
             self.expected_value_ph[root.placeholders_[i]] = root.expectations_[i].reshape(self.num_states, 1)
@@ -243,7 +251,7 @@ class PhyloTree:
             self.expected_value_ph[root.left.placeholders_[i]] = root.left.expectations_[i].reshape(self.num_states, 1)
 
             root.right.prob_right_descendants_[i] = tr_matrices[root.right.length].dot(root.prob_left_descendants_[i])
-            root.right.expectations_[i] = root.right.prob_right_descendants_[i] * root.right.prob_right_descendants_[i] * tr_matrices[root.right.length].dot(root.expectations_[i])
+            root.right.expectations_[i] = root.right.prob_left_descendants_[i] * root.right.prob_right_descendants_[i] * tr_matrices[root.right.length].dot(root.expectations_[i])
             root.right.expectations_[i] /= root.right.expectations_[i].sum()
             self.expected_value_ph[root.right.placeholders_[i]] = root.right.expectations_[i].reshape(self.num_states, 1)
 
@@ -281,7 +289,6 @@ class PhyloTree:
         compute_helper(root.right, root.placeholders_)
 
 
-
     def maximize_log_likelihood_(self):
         """
         Maximizes the expected complete log conditional.
@@ -290,19 +297,18 @@ class PhyloTree:
         prv = 0
         nxt = self.sess.run(self.log_likelihood, feed_dict=self.expected_value_ph)
         it = 1
-        while abs(nxt - prv) > 0.1:
-            print("\tlog_likelihood =", nxt)
+        while abs(nxt - prv) > 0.01:
             prv = nxt
             self.sess.run(self.train, feed_dict=self.expected_value_ph)
             nxt = self.sess.run(self.log_likelihood, feed_dict=self.expected_value_ph)
             it += 1
+            print("\tlog_likelihood =", nxt)
 
 
     def simulate_(self, node):
         """
         Helper function to simulate observations.
         """
-
         if node.left == None:
             return
 
@@ -354,6 +360,11 @@ class PhyloTree:
         Runs the expectation maximization algorithm to estimate
         model parameter.
         """
+        #self.sess = tf.Session()
+        #init = tf.global_variables_initializer()
+        #self.sess.run(init)
+        #self.calculate_expectations_(self.root)
+        #return
 
         print("Building computation graph...")
         self.compute_complete_log_likelihood_(self.root)
@@ -369,7 +380,7 @@ class PhyloTree:
         
         print("Running EM algorithm...")
         it = 1
-        while abs((nxt - prv).sum()) > 0.1:
+        while abs((nxt - prv).sum()) > 0.001:
             print("iteration: ", it)
             print("\tE step...")
             self.calculate_expectations_(self.root)
