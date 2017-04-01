@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import tensorflow as tf
 import src.TransitionMatrix
 
@@ -57,7 +58,7 @@ class PhyloTree:
         # Dictionary of placeholders to pass expected values to session as feed_dict
         self.expected_value_ph = {}
         # Numerical optimization routine
-        self.optimizer = tf.train.GradientDescentOptimizer(0.001)
+        self.optimizer = tf.train.GradientDescentOptimizer(0.00001)
         self.train = None
 
 
@@ -99,10 +100,8 @@ class PhyloTree:
         if root.left == None:
             return
 
-        root.placeholders_ = []
-        for i in range(self.num_obs):
-            root.placeholders_.append(tf.placeholder(tf.float64, shape=(self.num_states, 1), name=root.name + "_" + str(i)))
-        
+        root.placeholders_ = tf.placeholder(tf.float32, shape=(self.num_obs, self.num_states, 1))
+
         self.setup_(root.left)
         self.setup_(root.right)
 
@@ -172,7 +171,7 @@ class PhyloTree:
                 node.prob_right_descendants_[i] = tr_matrices[node.length].dot(prob_right_descendants[i])
                 node.expectations_[i] = node.prob_left_descendants_[i] * prob_right_descendants[i] * tr_matrices[node.left.length].dot(expectations[i])
                 node.expectations_[i] /= node.expectations_[i].sum()
-                self.expected_value_ph[node.placeholders_[i]] = node.expectations_[i].reshape(self.num_states, 1)
+            self.expected_value_ph[node.placeholders_] = node.expectations_.reshape(self.num_obs, self.num_states, 1)
 
             if not self.is_leaf_node(root.left):
                 top_down(node.left, node.prob_right_descendants_, node.expectations_)
@@ -199,7 +198,7 @@ class PhyloTree:
             root.prob_right_descendants_[i] = m2.dot(root.right.prob_left_descendants_[i])
             root.expectations_[i] = root.prob_left_descendants_[i] * root.prob_right_descendants_[i] * self.initial_distribution
             root.expectations_[i] /= root.expectations_[i].sum()
-            self.expected_value_ph[root.placeholders_[i]] = root.expectations_[i].reshape(self.num_states, 1)
+        self.expected_value_ph[root.placeholders_] = root.expectations_.reshape(self.num_obs, self.num_states, 1)
 
         top_down(root.left, root.prob_right_descendants_, root.expectations_)
         top_down(root.right, root.prob_left_descendants_, root.expectations_)
@@ -217,17 +216,15 @@ class PhyloTree:
             """
             if self.is_leaf_node(root):
                 for i in range(self.num_obs):
-                    for fr in range(self.num_states):
-                        prob = 0
-                        for to in range(self.num_states):
-                            if self.tr_matrix.states[to][0] == root.observations[i]:
-                                prob += self.tr_matrix.tr_matrix(root.length)[fr][to]
-                        self.log_likelihood += expectations[i][fr] * tf.log(prob)
+                    possible_states = tf.constant([1. if root.observations[i] == self.tr_matrix.states[j][0] else 0. \
+                                                       for j in range(self.num_states)], dtype=tf.float32)
+                    A = tf.multiply(self.tr_matrix.tr_matrix(root.length), possible_states) \
+                        + tf.constant([1. for i in range(self.num_states)]) - possible_states
+                    self.log_likelihood += tf.reduce_sum(tf.matmul(tf.log(A), expectations[i]))
 
             else:
-                log_prob = tf.log(self.tr_matrix.tr_matrix(root.length))
                 for i in range(self.num_obs):
-                    self.log_likelihood += tf.reduce_sum(tf.matmul(log_prob, expectations[i]))
+                    self.log_likelihood += tf.reduce_sum(tf.matmul(tf.log(self.tr_matrix.tr_matrix(root.length)), expectations[i]))
                     compute_helper(root.left, root.placeholders_)
                     compute_helper(root.right, root.placeholders_)
 
@@ -300,24 +297,17 @@ class PhyloTree:
         Runs the expectation maximization algorithm to estimate
         model parameter.
         """
-        #self.sess = tf.Session()
-        #init = tf.global_variables_initializer()
-        #self.sess.run(init)
-        #self.calculate_expectations_(self.root)
-        #return
-
         np.seterr(under="raise")
         print("Building computation graph...")
-        self.compute_complete_log_likelihood_(self.root)
-        self.sess = tf.Session()
         init = tf.global_variables_initializer()
+        self.sess = tf.Session()
         self.sess.run(init)
-        self.train = self.optimizer.minimize(-self.log_likelihood)
+        self.compute_complete_log_likelihood_(self.root)
+        self.train = self.optimizer.minimize(-self.log_likelihood)   
         #writer = tf.summary.FileWriter("log", graph=tf.get_default_graph())
 
         prv = np.array([1])
         nxt = np.array([0])
-
         print("Running EM algorithm...")
         it = 1
         while abs((nxt - prv).sum()) > 0.01:
