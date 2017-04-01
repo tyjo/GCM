@@ -135,15 +135,10 @@ class PhyloTree:
             if self.is_leaf_node(root.left):
                 t1 = root.left.length
                 t2 = root.right.length
-
-                if t1 in tr_matrices:
-                    m1 = tr_matrices[t1]
-                else:
-                    tr_matrices[t1] = m1 = self.sess.run(self.tr_matrix.tr_matrix(t1))
-                if t1 in tr_matrices:
-                    m2 = tr_matrices[t2]
-                else:
-                    tr_matrices[t2] = m2 = self.sess.run(self.tr_matrix.tr_matrix(t2))
+                if t1 not in tr_matrices: tr_matrices[t1] = self.sess.run(self.tr_matrix.tr_matrix(t1))
+                if t2 not in tr_matrices: tr_matrices[t2] = self.sess.run(self.tr_matrix.tr_matrix(t2))
+                m1 = tr_matrices[t1]
+                m2 = tr_matrices[t2]
 
                 for i in range(self.num_obs):
                     for fr in range(self.num_states):
@@ -162,15 +157,10 @@ class PhyloTree:
 
                 t1 = root.left.length
                 t2 = root.right.length
-                if t1 in tr_matrices:
-                    m1 = tr_matrices[t1]
-                else:
-                    tr_matrices[t1] = m1 = self.sess.run(self.tr_matrix.tr_matrix(t1))
-
-                if t1 in tr_matrices:
-                    m2 = tr_matrices[t2]
-                else:
-                    tr_matrices[t2] = m2 = self.sess.run(self.tr_matrix.tr_matrix(t2))
+                if t1 not in tr_matrices: tr_matrices[t1] = self.sess.run(self.tr_matrix.tr_matrix(t1))
+                if t2 not in tr_matrices: tr_matrices[t2] = self.sess.run(self.tr_matrix.tr_matrix(t2))
+                m1 = tr_matrices[t1]
+                m2 = tr_matrices[t2]
 
                 for i in range(self.num_obs):
                     for fr in range(self.num_states):
@@ -180,83 +170,52 @@ class PhyloTree:
                         root.prob_left_descendants_[i][fr] = x.T.dot(np.eye(self.num_states).dot(y))
 
 
-        def top_down(node):
+        def top_down(node, prob_right_descendants, expectations):
             """
             Computes expecations of left and right children after call to bottom_up.
             """
-            if self.is_leaf_node(node.left):
+            if self.is_leaf_node(node):
                 return
 
-            assert(node.expectations_ != None)
-            assert(node.left.prob_left_descendants_ != None)
-            assert(node.right.prob_left_descendants_ != None)
-            t1 = root.left.length
-            t2 = root.right.length
-            m1 = tr_matrices[t1]
-            m2 = tr_matrices[t2]
-            node.left.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
-            node.right.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
-            node.left.expectations_ = np.zeros((self.num_obs, self.num_states))
-            node.right.expectations_ = np.zeros((self.num_obs, self.num_states))
-            for i in range(self.num_obs):
-                node.left.prob_right_descendants_[i] = tr_matrices[root.left.length].dot(node.prob_right_descendants_[i])
-                node.left.expectations_[i] = node.left.prob_left_descendants_[i] * node.left.prob_right_descendants_[i] * tr_matrices[root.left.length].dot(node.expectations_[i])
-                node.left.expectations_[i] /= node.left.expectations_[i].sum()
-                self.expected_value_ph[node.left.placeholders_[i]] = node.left.expectations_[i].reshape(self.num_states, 1)
+            assert(node.prob_left_descendants_ != None)
 
-                node.right.prob_right_descendants_[i] = tr_matrices[root.right.length].dot(node.prob_right_descendants_[i])
-                node.right.expectations_[i] = node.right.prob_left_descendants_[i] * node.right.prob_right_descendants_[i] * tr_matrices[root.right.length].dot(node.expectations_[i])
-                node.right.expectations_[i] /= node.right.expectations_[i].sum()
-                self.expected_value_ph[node.right.placeholders_[i]] = node.right.expectations_[i].reshape(self.num_states,1)
+            node.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
+            node.expectations_ = np.zeros((self.num_obs, self.num_states))
+            for i in range(self.num_obs):
+                node.prob_right_descendants_[i] = tr_matrices[node.length].dot(prob_right_descendants[i])
+                node.expectations_[i] = node.prob_left_descendants_[i] * prob_right_descendants[i] * tr_matrices[node.left.length].dot(expectations[i])
+                node.expectations_[i] /= node.expectations_[i].sum()
+                self.expected_value_ph[node.placeholders_[i]] = node.expectations_[i].reshape(self.num_states, 1)
 
             if not self.is_leaf_node(root.left):
-                top_down(node.left)
-                top_down(node.right)
+                top_down(node.left, node.prob_right_descendants_, node.expectations_)
+                top_down(node.right, node.prob_right_descendants_, node.expectations_)
         
         # Save computed transition matrices. Dictionary from time to np.array.
         tr_matrices = {}
         bottom_up(root.left)
         bottom_up(root.right)
+
         t1 = root.left.length
         t2 = root.right.length
-        if t1 in tr_matrices:
-            m1 = tr_matrices[t1]
-        else:
-            tr_matrices[t1] = m1 = self.sess.run(self.tr_matrix.tr_matrix(t1))
-
-        if t1 in tr_matrices:
-            m2 = tr_matrices[t2]
-        else:
-            tr_matrices[t2] = m2 = self.sess.run(self.tr_matrix.tr_matrix(t2))
+        if t1 not in tr_matrices: tr_matrices[t1] = self.sess.run(self.tr_matrix.tr_matrix(t1))
+        if t2 not in tr_matrices: tr_matrices[t2] = self.sess.run(self.tr_matrix.tr_matrix(t2))
+        m1 = tr_matrices[t1]
+        m2 = tr_matrices[t2]
 
         root.prob_left_descendants_ = np.zeros((self.num_obs, self.num_states))
         root.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
-        root.left.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
-        root.right.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
         root.expectations_ = np.zeros((self.num_obs, self.num_states))
-        root.left.expectations_ = np.zeros((self.num_obs, self.num_states))
-        root.right.expectations_ = np.zeros((self.num_obs, self.num_states))
 
         for i in range(self.num_obs):
-            print(self.tr_matrix.states)
             root.prob_left_descendants_[i] = m1.dot(root.left.prob_left_descendants_[i])
             root.prob_right_descendants_[i] = m2.dot(root.right.prob_left_descendants_[i])
             root.expectations_[i] = root.prob_left_descendants_[i] * root.prob_right_descendants_[i] * self.initial_distribution
             root.expectations_[i] /= root.expectations_[i].sum()
             self.expected_value_ph[root.placeholders_[i]] = root.expectations_[i].reshape(self.num_states, 1)
 
-            root.left.prob_right_descendants_[i] = tr_matrices[root.left.length].dot(root.prob_right_descendants_[i])
-            root.left.expectations_[i] = root.left.prob_left_descendants_[i] * root.left.prob_right_descendants_[i] * tr_matrices[root.left.length].dot(root.expectations_[i])
-            root.left.expectations_[i] /= root.left.expectations_[i].sum()
-            self.expected_value_ph[root.left.placeholders_[i]] = root.left.expectations_[i].reshape(self.num_states, 1)
-
-            root.right.prob_right_descendants_[i] = tr_matrices[root.right.length].dot(root.prob_left_descendants_[i])
-            root.right.expectations_[i] = root.right.prob_left_descendants_[i] * root.right.prob_right_descendants_[i] * tr_matrices[root.right.length].dot(root.expectations_[i])
-            root.right.expectations_[i] /= root.right.expectations_[i].sum()
-            self.expected_value_ph[root.right.placeholders_[i]] = root.right.expectations_[i].reshape(self.num_states, 1)
-
-        top_down(root.left)
-        top_down(root.right)
+        top_down(root.left, root.prob_right_descendants_, root.expectations_)
+        top_down(root.right, root.prob_left_descendants_, root.expectations_)
 
 
     def compute_complete_log_likelihood_(self, root):
