@@ -81,9 +81,6 @@ class PhyloTree:
 
         if self.is_leaf_node(root) and self.num_obs == 0:
                 self.num_obs = len(root.observations)
-                
-        elif self.is_leaf_node(root) and self.num_obs == 0:
-                self.num_obs = len(root.observations)
 
         elif self.is_leaf_node(root) == None and self.num_obs != len(root.observations):
                 raise AssertionError("Leaf nodes must all have the same number of observations")
