@@ -30,6 +30,9 @@ class Node:
         # the expected complete log likelihood.
         self.placeholders_ = None
 
+        # Store simulated values
+        self.simulated_obs = None
+
 
 
 
@@ -58,9 +61,8 @@ class PhyloTree:
         # Dictionary of placeholders to pass expected values to session as feed_dict
         self.expected_value_ph = {}
         # Numerical optimization routine
-        self.optimizer = tf.train.GradientDescentOptimizer(0.00001)
+        self.optimizer = None
         self.train = None
-
 
         assert root.left != None, "Trees must have at least one child node"
         self.check_tree_(root)
@@ -215,6 +217,8 @@ class PhyloTree:
                 for i in range(self.num_obs):
                     possible_states = tf.constant([1. if root.observations[i] == self.tr_matrix.states[j][0] else 0. \
                                                        for j in range(self.num_states)], dtype=tf.float32)
+                    # Can't have zero entries when we take the log. We set zero entries in A
+                    # to one so they become zero after applying tf.log.
                     A = tf.multiply(self.tr_matrix.tr_matrix(root.length), possible_states) \
                         + tf.constant([1. for i in range(self.num_states)]) - possible_states
                     self.log_likelihood += tf.reduce_sum(tf.matmul(tf.log(A), expectations[i]))
@@ -237,7 +241,7 @@ class PhyloTree:
         prv = 0
         nxt = self.sess.run(self.log_likelihood, feed_dict=self.expected_value_ph)
         it = 1
-        while abs(nxt - prv) > 0.01:
+        while abs(nxt - prv) > 0.1:
             prv = nxt
             self.sess.run(self.train, feed_dict=self.expected_value_ph)
             nxt = self.sess.run(self.log_likelihood, feed_dict=self.expected_value_ph)
@@ -252,9 +256,9 @@ class PhyloTree:
         if node.left == None:
             return
 
-        node.left.observations = []
-        node.right.observations = []
-        for obs in node.observations:
+        node.left.simulated_obs = []
+        node.right.simulated_obs = []
+        for obs in node.simulated_obs:
             index = self.tr_matrix.states.index(obs)
             row1 = self.sess.run(self.tr_matrix.tr_matrix(node.left.length))[index]
             row2 = self.sess.run(self.tr_matrix.tr_matrix(node.right.length))[index]
@@ -265,11 +269,11 @@ class PhyloTree:
 
             i1 = np.random.multinomial(1, row1).argmax()
             i2 = np.random.multinomial(1, row2).argmax()
-            node.left.observations.append(self.tr_matrix.states[i1])
-            node.right.observations.append(self.tr_matrix.states[i2])
+            node.left.simulated_obs.append(self.tr_matrix.states[i1])
+            node.right.simulated_obs.append(self.tr_matrix.states[i2])
 
-        print("{}\t{}".format(node.left.name, node.left.observations))
-        print("{}\t{}".format(node.right.name, node.right.observations))
+        print("{}\t{}".format(node.left.name, node.left.simulated_obs))
+        print("{}\t{}".format(node.right.name, node.right.simulated_obs))
 
         self.simulate_(node.left)
         self.simulate_(node.right)
@@ -284,12 +288,16 @@ class PhyloTree:
         init = tf.global_variables_initializer()
         self.sess.run(init)
 
-        print("{}\t{}".format(self.root.name, self.root.observations))
+        self.root.simulated_obs = []
+        for i in range(size):
+            self.root.simulated_obs.append(np.random.choice(self.tr_matrix.states))
+
+        print("{}\t{}".format(self.root.name, self.root.simulated_obs))
         if self.root.left != None:
             self.simulate_(self.root)
 
 
-    def estimate(self):
+    def estimate(self, step_size):
         """
         Runs the expectation maximization algorithm to estimate
         model parameter.
@@ -300,24 +308,28 @@ class PhyloTree:
         self.sess = tf.Session()
         self.sess.run(init)
         self.compute_complete_log_likelihood_(self.root)
+        self.optimizer = tf.train.GradientDescentOptimizer(step_size)
         self.train = self.optimizer.minimize(-self.log_likelihood)   
         #writer = tf.summary.FileWriter("log", graph=tf.get_default_graph())
 
-        prv = np.array([1])
-        nxt = np.array([0])
+        prv = np.zeros(4)
+        nxt = np.array(self.sess.run([self.tr_matrix.tr_rate, self.tr_matrix.tv_rate,
+                                      self.tr_matrix.on_rate, self.tr_matrix.off_rate]))
         print("Running EM algorithm...")
         it = 1
-        while abs((nxt - prv).sum()) > 0.01:
+        while abs((nxt - prv).sum()) > 0.001:
             print("iteration: ", it)
             print("\tE step...")
             self.calculate_expectations_(self.root)
             print("\tM step...")
             self.maximize_log_likelihood_()
             prv = nxt
-            nxt =  self.sess.run(self.log_likelihood, feed_dict=self.expected_value_ph)
-            parameters = np.array(self.sess.run([self.tr_matrix.tr_rate, self.tr_matrix.tv_rate,
-                                                 self.tr_matrix.on_rate, self.tr_matrix.off_rate]))
-            print("\tParameter estimates: ", parameters)
+            nxt = np.array(self.sess.run([self.tr_matrix.tr_rate, self.tr_matrix.tv_rate,
+                                      self.tr_matrix.on_rate, self.tr_matrix.off_rate]))
+            #nxt = self.sess.run(self.log_likelihood, feed_dict=self.expected_value_ph)
+            #parameters = np.array(self.sess.run([self.tr_matrix.tr_rate, self.tr_matrix.tv_rate,
+            #                                     self.tr_matrix.on_rate, self.tr_matrix.off_rate]))
+            print("\tParameter estimates: ", nxt)
             it += 1
 
 
