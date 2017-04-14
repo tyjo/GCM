@@ -270,13 +270,13 @@ class PhyloTree:
 
         self.tr_matrix = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
         compute_helper(self.root)
-        self.log_likelihood = np.log(self.root.expectations_).sum()
-        print(self.root.expectations_)
-        print(self.root.left.expectations_)
-        print(self.root.right.expectations_)
-        return
-        #print(param)
-        return -np.log(self.root.expectations_).sum()
+        self.log_likelihood = np.log(self.root.expectations_.sum(axis=1)).sum()
+        #print(self.root.expectations_)
+        #print(np.log(self.root.expectations_.sum(axis=1)).sum())
+        #return
+        print(self.log_likelihood)
+        print(param)
+        return -np.log(self.root.expectations_.sum(axis=1)).sum()
 
 
     def maximize_log_likelihood_(self):
@@ -290,9 +290,9 @@ class PhyloTree:
                                           self.tr_matrix.tv_rate,
                                           self.tr_matrix.on_rate,
                                           self.tr_matrix.off_rate]),
+                                #method="nelder-mead")
                                 method="cobyla",
-                                options={"rhobeg":0.01},
-                                bounds=[(0.2, 2),(0.2, 2),(0.2, 2),(0.2, 2)])
+                                options={"rhobeg":0.01})
         print("\t", self.log_likelihood)
 
 
