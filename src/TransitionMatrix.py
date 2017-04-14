@@ -4,6 +4,7 @@ import scipy.linalg
 class TransitionMatrix:
 
     def __init__(self, tr_rate, tv_rate, on_rate, off_rate):
+        assert tr_rate > 0 and tv_rate > 0 and on_rate > 0 and off_rate > 0
         # transition rate
         self.tr_rate = tr_rate
 
