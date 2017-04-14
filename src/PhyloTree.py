@@ -240,37 +240,46 @@ class PhyloTree:
 
 
     def compute_log_likelihood_(self, param):
-        def compute_helper(root):
+        def compute_helper(root, tr_matrix):
             if root == None: return
 
+            root.expectations_ = np.zeros((self.num_obs, self.num_states))
             if self.is_leaf_node(root.left):
                 root.left.expectations_ = np.zeros((self.num_obs, self.num_states))
                 root.right.expectations_ = np.zeros((self.num_obs, self.num_states))
                 for i in range(self.num_obs):
-                    root.left.expectations_[i] = np.array([1. if root.left.observations[i] == self.tr_matrix.states[j] else 0. \
+                    #root.left.expectations_[i] = np.array([1. if root.left.observations[i] == self.tr_matrix.states[j] else 0. \
+                    #                                   for j in range(self.num_states)])
+                    #root.right.expectations_[i] = np.array([1. if root.right.observations[i] == self.tr_matrix.states[j] else 0. \
+                    #                                   for j in range(self.num_states)])
+                    root.left.expectations_[i] = np.array([1. if root.left.observations[i] == self.tr_matrix.states[j][0] else 0. \
                                                        for j in range(self.num_states)])
-                    root.right.expectations_[i] = np.array([1. if root.right.observations[i] == self.tr_matrix.states[j] else 0. \
+                    root.right.expectations_[i] = np.array([1. if root.right.observations[i] == self.tr_matrix.states[j][0] else 0. \
                                                        for j in range(self.num_states)])
+                    left = tr_matrix.tr_matrix(root.left.length) * root.left.expectations_[i]
+                    right = tr_matrix.tr_matrix(root.right.length) * root.right.expectations_[i]
+                    root.expectations_[i] = left.sum(axis=1)*right.sum(axis=1)
+
             else:
                 compute_helper(root.left)
                 compute_helper(root.right)
             
-            ones = np.ones((self.num_states, self.num_states))
-            root.expectations_ = np.zeros((self.num_obs, self.num_states))
-            for i in range(self.num_obs):   
-                left = self.tr_matrix.tr_matrix(root.left.length)*root.left.expectations_[i]
-                right = self.tr_matrix.tr_matrix(root.right.length)*root.right.expectations_[i]
-                #print((left.dot(ones)*right).sum(axis=1))   
-                #root.expectations_[i] = (left.dot(ones)*right).sum(axis=1)
-                root.expectations_[i] = (right.dot(ones)*left).sum(axis=1)
+                ones = np.ones((self.num_states, self.num_states))
+                for i in range(self.num_obs):   
+                    left = tr_matrix.tr_matrix(root.left.length)*root.left.expectations_[i]
+                    right = tr_matrix.tr_matrix(root.right.length)*root.right.expectations_[i]
+                    root.expectations_[i] = (right.dot(ones)*left).sum(axis=1)
+            
+            #print(root.expectations_)
                 #for j in range(self.num_states):
                 #    for k in range(self.num_states):
                 #        for l in range(self.num_states):
                 #            root.expectations_[i][j] += left[j][k]*right[j][l]
 
-        self.tr_matrix = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
-        compute_helper(self.root)
-        self.log_likelihood = np.log(self.root.expectations_.sum(axis=1)).sum()
+        tr_matrix = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
+        compute_helper(self.root, tr_matrix)
+        self.log_likelihood = np.log((self.root.expectations_*self.initial_distribution).sum(axis=1)).sum()
+        assert(self.log_likelihood < 0.)
         #print(self.root.expectations_)
         #print(np.log(self.root.expectations_.sum(axis=1)).sum())
         #return
@@ -292,7 +301,11 @@ class PhyloTree:
                                           self.tr_matrix.off_rate]),
                                 #method="nelder-mead")
                                 method="cobyla",
-                                options={"rhobeg":0.01})
+                                options={"rhobeg":0.4},
+                                constraints = [ {'type': 'ineq', 'fun': lambda x: x > 0.001},
+                                                {'type': 'ineq', 'fun': lambda x: x > 0.001},
+                                                {'type': 'ineq', 'fun': lambda x: x > 0.001},
+                                                {'type': 'ineq', 'fun': lambda x: x > 0.001}])
         print("\t", self.log_likelihood)
 
 
@@ -327,10 +340,10 @@ class PhyloTree:
                 node.left.simulated_obs.append(self.tr_matrix.states[i1])
                 node.right.simulated_obs.append(self.tr_matrix.states[i2])
 
-        #print("{}\t{}".format(node.left.name, "".join(node.left.simulated_obs)))
-        #print("{}\t{}".format(node.right.name, "".join(node.right.simulated_obs)))
-        print("{}\t{}".format(node.left.name, node.left.simulated_obs))
-        print("{}\t{}".format(node.right.name, node.right.simulated_obs))
+        print("{}\t{}".format(node.left.name, "".join(obs[0] for obs in node.left.simulated_obs)))
+        print("{}\t{}".format(node.right.name, "".join(obs[0] for obs in node.right.simulated_obs)))
+        #print("{}\t{}".format(node.left.name, node.left.simulated_obs))
+        #print("{}\t{}".format(node.right.name, node.right.simulated_obs))
 
         self.simulate_(node.left)
         self.simulate_(node.right)
@@ -360,23 +373,10 @@ class PhyloTree:
         prv = np.zeros(4)
         nxt = np.array([self.tr_matrix.tr_rate, self.tr_matrix.tv_rate,
                         self.tr_matrix.on_rate, self.tr_matrix.off_rate])
-        print("Running EM algorithm...")
-        it = 1
-        while abs((nxt - prv).sum()) > 0.001:
-            print("iteration: ", it)
-            #print("\tE step...")
-            #self.calculate_expectations_(self.root)
-            print("\tM step...")
-            self.maximize_log_likelihood_()
-            prv = nxt
-            nxt = np.array([self.tr_matrix.tr_rate, self.tr_matrix.tv_rate,
-                            self.tr_matrix.on_rate, self.tr_matrix.off_rate])
-            #nxt = self.sess.run(self.log_likelihood, feed_dict=self.expected_value_ph)
-            #parameters = np.array(self.sess.run([self.tr_matrix.tr_rate, self.tr_matrix.tv_rate,
-            #                                     self.tr_matrix.on_rate, self.tr_matrix.off_rate]))
-            print("\tParameter estimates: ", nxt)
-            it += 1
-
+        print("Running...")
+        self.maximize_log_likelihood_()
+        print("\tParameter estimates: ", nxt)
+        
 
     def print_parameters(self):
         print("tr_rate:\t", self.tr_matrix.tr_rate)
