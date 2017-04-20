@@ -142,38 +142,41 @@ class PhyloTree:
         Given a tree, simulates size observations along the branches.
         """
         print("Simulating tree...")
-        self.root.simulated_obs = []
-        for i in range(size):
-            self.root.simulated_obs.append(np.random.choice(self.tr_matrix.states))
+        self.root.simulated_obs = np.array( [ np.random.multinomial(1, self.initial_distribution)
+                                              for i in range(size) ])
 
+        left_transitions = self.root.simulated_obs.dot(self.tr_matrix.tr_matrix(self.root.left.length))
+        right_transitions = self.root.simulated_obs.dot(self.tr_matrix.tr_matrix(self.root.right.length))
+        self.root.left.simulated_obs = np.array( [ np.random.multinomial(1, left_transitions[i])
+                                                   for i in range(size) ])
+        self.root.right.simulated_obs = np.array([ np.random.multinomial(1, right_transitions[i])
+                                                   for i in range(size) ])
+        
         #print("{}\t{}".format(self.root.name, self.root.simulated_obs))
-        if self.root.left != None:
-            self.simulate_(self.root)
+        self.simulate_(self.root.left)
+        self.simulate_(self.root.right)
 
 
     def simulate_(self, node):
         """
         Helper function to simulate observations.
         """
-        if node.left == None:
+        if self.is_leaf_node(node):
+            node.simulated_obs = [ self.tr_matrix.states[obs.argmax()] for obs in node.simulated_obs ]
+            #print("{}\t{}".format(node.name, node.simulated_obs))
             return
 
-        node.left.simulated_obs = []
-        node.right.simulated_obs = []
-        for obs in node.simulated_obs:
-            index = self.tr_matrix.states.index(obs)
-            row1 = self.tr_matrix.tr_matrix(node.left.length)[index]
-            row2 = self.tr_matrix.tr_matrix(node.right.length)[index]
+        #print(node.name)
+        left_transitions = node.simulated_obs.dot(self.tr_matrix.tr_matrix(self.root.left.length))
+        right_transitions = node.simulated_obs.dot(self.tr_matrix.tr_matrix(self.root.right.length))
 
-            i1 = np.random.multinomial(1, row1).argmax()
-            i2 = np.random.multinomial(1, row2).argmax()
-
-            node.left.simulated_obs.append(self.tr_matrix.states[i1])
-            node.right.simulated_obs.append(self.tr_matrix.states[i2])
-
+        node.left.simulated_obs = np.array( [ np.random.multinomial(1, left_transitions[i])
+                                                   for i in range(len(node.simulated_obs)) ])
+        node.right.simulated_obs = np.array([ np.random.multinomial(1, right_transitions[i])
+                                                   for i in range(len(node.simulated_obs)) ])
+        
         #print("{}\t{}".format(node.left.name, node.left.simulated_obs))
         #print("{}\t{}".format(node.right.name, node.right.simulated_obs))
-
         self.simulate_(node.left)
         self.simulate_(node.right)
 
