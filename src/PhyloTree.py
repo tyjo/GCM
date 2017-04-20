@@ -146,7 +146,7 @@ class PhyloTree:
         for i in range(size):
             self.root.simulated_obs.append(np.random.choice(self.tr_matrix.states))
 
-        print("{}\t{}".format(self.root.name, self.root.simulated_obs))
+        #print("{}\t{}".format(self.root.name, self.root.simulated_obs))
         if self.root.left != None:
             self.simulate_(self.root)
 
@@ -171,8 +171,8 @@ class PhyloTree:
             node.left.simulated_obs.append(self.tr_matrix.states[i1])
             node.right.simulated_obs.append(self.tr_matrix.states[i2])
 
-        print("{}\t{}".format(node.left.name, node.left.simulated_obs))
-        print("{}\t{}".format(node.right.name, node.right.simulated_obs))
+        #print("{}\t{}".format(node.left.name, node.left.simulated_obs))
+        #print("{}\t{}".format(node.right.name, node.right.simulated_obs))
 
         self.simulate_(node.left)
         self.simulate_(node.right)
