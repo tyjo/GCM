@@ -109,7 +109,7 @@ class TransitionMatrix:
 
     def tr_matrix(self, time):
         """
-        Compute the Tensorflow graph for e^{Qt} for t = time and stores the result.
+        Compute the for e^{Qt} for t = time.
         """
         return scipy.linalg.expm(self.Q*time)
 
