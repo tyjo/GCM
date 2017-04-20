@@ -2,7 +2,7 @@ import numpy as np
 import os
 import scipy.linalg
 import tensorflow as tf
-import src.TransitionMatrix
+import src.TransitionMatrix as tm
 
 class Node:
 
@@ -13,15 +13,10 @@ class Node:
         self.left = None
         self.right = None
 
-        # Probability of observations p(X|Node) that descended from the current
-        # node. We use this in the bottom up part of the calculation for
-        # expectations. Left descendants are those that are direct descendants
-        # of the node. Right descendants are those observations that are not
-        # directly below the node. That is, descendants of some ancestral node.
-        # The root node is an exception, where left decendants and right decendants
-        # direct descendents of the left and right leaves respectively.
+        #
         self.prob_left_descendants_ = None
         self.prob_right_descendants_ = None
+        self.prob_below_ = None
 
         # Numerical conditional expectation of the node given observations and
         # current parameter values.
@@ -45,13 +40,14 @@ class PhyloTree:
         self.num_states = len(self.tr_matrix.states)
         # The length of the observed sequence in leaf nodes
         self.num_obs = 0
-        # The initial distribution of the root node
-        self.initial_distribution = np.array([ 1. / self.num_states for st in tr_matrix.states ], np.float32)
+        
         # Dictionary of node name to index
         self.index = {}
         self.setup_(self.root)
         self.check_tree_(root)
         self.num_nodes = max(self.index.values()) + 1
+        # The initial distribution of the root node
+        self.initial_distribution = np.array([ 1. / self.num_states for st in tr_matrix.states ], np.float32) #for j in range(self.num_obs)], np.float32)
 
 
         #############################
@@ -59,7 +55,7 @@ class PhyloTree:
         #############################
         self.sess = None
         # The tensorflow graph of the expected complete log likelihood, prevents recomputation
-        self.log_likelihood = 0
+        self.log_likelihood = tf.constant(0.)
         # Numerical optimization routine
         self.optimizer = None
         self.gradient = None
@@ -68,12 +64,12 @@ class PhyloTree:
         assert root.left != None, "Trees must have at least one child node"
 
         # Placesholders to pass to graph
-        self.observations_ph_ = tf.placeholder(tf.float32, shape=(min(self.num_obs, 200), self.num_nodes, self.num_states), name="observations")
+        self.observations_ph_ = tf.placeholder(tf.float32, shape=(min(self.num_obs, 1), self.num_nodes, self.num_states), name="observations")
         self.observations_ = np.zeros((self.num_obs, self.num_nodes, self.num_states), dtype=np.float32)
         self.set_observations_(self.root)
         
-        self.expectations_ph_ = tf.placeholder(tf.float32, shape=(min(self.num_obs, 200), self.num_nodes, self.num_states, 1), name="expectations")
-        self.expectations_ = np.zeros((self.num_obs, self.num_nodes, self.num_states, 1), dtype=np.float32)
+        self.expectations_ph_ = tf.placeholder(tf.float32, shape=(min(self.num_obs, 1), self.num_nodes, self.num_states), name="expectations")
+        self.expectations_ = np.zeros((self.num_obs, self.num_nodes, self.num_states), dtype=np.float32)
         #self.placeholders_ = { self.observations_ph_ : self.observations_,
         #                       self.expectations_ph_ : self.expectations_}
 
@@ -107,8 +103,9 @@ class PhyloTree:
         index = self.index[root.name]
         if self.is_leaf_node(root):
             for i in range(self.num_obs):
-                self.observations_[i][index] = np.array([1. if root.observations[i] == self.tr_matrix.states[j][0] else 0. for j in range(self.num_states)])
-                #self.observations_[i][index] = np.array([1. if root.observations[i] == self.tr_matrix.states[j] else 0. for j in range(self.num_states)])
+                #self.observations_[i][index] = np.array([1. if root.observations[i] == self.tr_matrix.states[j][0] else 0. for j in range(self.num_states)])
+                #print(self.observations_[i][index])
+                self.observations_[i][index] = np.array([1. if root.observations[i] == self.tr_matrix.states[j] else 0. for j in range(self.num_states)])
         else:
             for i in range(self.num_obs):
                 self.observations_[i][index] = np.ones(self.num_states)
@@ -152,6 +149,8 @@ class PhyloTree:
             for description of left and right descendants
             """
             root.prob_left_descendants_ = np.zeros((self.num_obs, self.num_states))
+            root.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
+            root.prob_below_ = np.zeros((self.num_obs, self.num_states))
 
             if self.is_leaf_node(root.left):
                 t1 = root.left.length
@@ -165,18 +164,16 @@ class PhyloTree:
                     for fr in range(self.num_states):
                         assert abs(m1[fr].sum() - 1) < 0.01, "Bad transition matrix"
                         assert abs(m2[fr].sum() - 1) < 0.01, "Bad transition matrix"
-                        prob_left = 0
-                        prob_right = 0
                         for to in range(self.num_states):
-                            if self.tr_matrix.states[to][0] == root.left.observations[i]:
-                                prob_left += m1[fr][to]
-                            if self.tr_matrix.states[to][0] == root.right.observations[i]:
-                                prob_right += m2[fr][to]
-                            #if self.tr_matrix.states[to] == root.left.observations[i]:
+                            #if self.tr_matrix.states[to][0] == root.left.observations[i]:
                             #    prob_left += m1[fr][to]
-                            #if self.tr_matrix.states[to] == root.right.observations[i]:
+                            #if self.tr_matrix.states[to][0] == root.right.observations[i]:
                             #    prob_right += m2[fr][to]
-                        root.prob_left_descendants_[i][fr] = prob_left * prob_right
+                            if self.tr_matrix.states[to] == root.left.observations[i]:
+                                root.prob_left_descendants_[i][fr] += m1[fr][to]
+                            if self.tr_matrix.states[to] == root.right.observations[i]:
+                                root.prob_right_descendants_[i][fr] += m2[fr][to]
+                        root.prob_below_[i][fr] = root.prob_left_descendants_[i][fr] *  root.prob_right_descendants_[i][fr]
 
             else:
                 bottom_up(root.left)
@@ -193,62 +190,58 @@ class PhyloTree:
                     for fr in range(self.num_states):
                         assert abs(m1[fr].sum() - 1) < 0.01, "Bad transition matrix"
                         assert abs(m2[fr].sum() - 1) < 0.01, "Bad transition matrix"
-                        x = root.left.prob_left_descendants_[i] * m1[fr]
-                        y = root.right.prob_left_descendants_[i] * m2[fr]
-                        root.prob_left_descendants_[i][fr] = x.T.dot(np.eye(self.num_states).dot(y))
+                        root.prob_left_descendants_[i] = root.left.prob_below_[i] * m1[fr]
+                        root.prob_right_descendants_[i] = root.right.prob_below_[i] * m2[fr]
+                        left = (root.prob_left_descendants_[i]).sum()
+                        right = root.prob_right_descendants_[i]
+                        root.prob_below_[i][fr] = (left*right).sum()
 
 
-        def top_down(node, prob_right_descendants, expectations):
+        def top_down(node, prob_above, marginal):
             """
             Computes expecations of left and right children after call to bottom_up.
             """
             if self.is_leaf_node(node):
                 return
 
-            node.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
             node.expectations_ = np.zeros((self.num_obs, self.num_states))
+            above_marginal = marginal
+            marginal = marginal.dot(tr_matrices[node.length])
             for i in range(self.num_obs):
-                node.prob_right_descendants_[i] = tr_matrices[node.length].dot(prob_right_descendants[i])
-                node.expectations_[i] = node.prob_left_descendants_[i] * prob_right_descendants[i] * tr_matrices[node.left.length].dot(expectations[i])
+                node.expectations_[i] = (node.prob_below_[i] * prob_above[i]) * marginal
                 node.expectations_[i] /= node.expectations_[i].sum()
-                self.expectations_[i][self.index[node.name]] = node.expectations_[i].reshape((self.num_states, 1))
+                self.expectations_[i][self.index[node.name]] = node.expectations_[i]
 
-            if not self.is_leaf_node(root.left):
-                top_down(node.left, node.prob_right_descendants_, node.expectations_)
-                top_down(node.right, node.prob_right_descendants_, node.expectations_)
+            # Could be here
+            if not self.is_leaf_node(node.left):
+                m1 = tr_matrices[node.left.length]
+                m2 = tr_matrices[node.right.length]
+                left_above = np.zeros((self.num_obs, self.num_states))
+                right_above = np.zeros((self.num_obs, self.num_states))
+                for i in range(self.num_obs):
+                    left_above[i] = m1.dot(prob_above[i]*node.prob_right_descendants_[i]*above_marginal)/marginal
+                    right_above[i] = m2.dot(prob_above[i]*node.prob_left_descendants_[i]*above_marginal)/marginal
+                top_down(node.left, left_above, marginal)
+                top_down(node.right, right_above, marginal)
         
         # Save computed transition matrices. Dictionary from time to np.array.
         tr_matrices = {}
-        root.prob_left_descendants_ = np.zeros((self.num_obs, self.num_states))
-        root.prob_right_descendants_ = np.zeros((self.num_obs, self.num_states))
         root.expectations_ = np.zeros((self.num_obs, self.num_states))
+        bottom_up(root)
 
-        if self.is_leaf_node(root.left):
-            bottom_up(root)
-            for i in range(self.num_obs):
-                root.expectations_[i] = root.prob_left_descendants_[i] * self.initial_distribution
-                root.expectations_[i] /= root.expectations_[i].sum()
-                self.expectations_[i][self.index[root.name]] = root.expectations_[i].reshape((self.num_states, 1))
-            return
-
-        bottom_up(root.left)
-        bottom_up(root.right)
-        t1 = root.left.length
-        t2 = root.right.length
-        if t1 not in tr_matrices: tr_matrices[t1] = self.sess.run(self.tr_matrix.tr_matrix(t1))
-        if t2 not in tr_matrices: tr_matrices[t2] = self.sess.run(self.tr_matrix.tr_matrix(t2))
-        m1 = tr_matrices[t1]
-        m2 = tr_matrices[t2]
-
+        left_above = np.zeros((self.num_obs, self.num_states))
+        right_above = np.zeros((self.num_obs, self.num_states))
+        m1 = tr_matrices[root.left.length]
+        m2 = tr_matrices[root.right.length]
         for i in range(self.num_obs):
-            root.prob_left_descendants_[i] = m1.dot(root.left.prob_left_descendants_[i])
-            root.prob_right_descendants_[i] = m2.dot(root.right.prob_left_descendants_[i])
-            root.expectations_[i] = root.prob_left_descendants_[i] * root.prob_right_descendants_[i] * self.initial_distribution
+            root.expectations_[i] = root.prob_below_[i] * self.initial_distribution
             root.expectations_[i] /= root.expectations_[i].sum()
+            left_above[i] = m1.dot(self.initial_distribution*root.prob_right_descendants_[i])/(self.initial_distribution.dot(m1))
+            right_above[i] = m2.dot(self.initial_distribution*root.prob_left_descendants_[i])/(self.initial_distribution.dot(m2))
             self.expectations_[i][self.index[root.name]] = root.expectations_[i]
 
-        top_down(root.left, root.prob_right_descendants_, root.expectations_)
-        top_down(root.right, root.prob_left_descendants_, root.expectations_)
+        top_down(root.left, left_above, self.initial_distribution)
+        top_down(root.right, right_above, self.initial_distribution)
 
 
     def compute_complete_log_likelihood_(self):
@@ -258,29 +251,35 @@ class PhyloTree:
         """
         def compute_helper(root, parent_index):
             if self.is_leaf_node(root):
-                #for i in range(self.num_obs):
-                for i in range(min(self.num_obs, 200)):
-                    A = tf.multiply(self.tr_matrix.tr_matrix(root.length), self.observations_ph_[i][self.index[root.name]]) \
-                        + tf.constant([1. for j in range(self.num_states)], tf.float32) - self.observations_ph_[i][self.index[root.name]]
-                    self.log_likelihood += tf.reduce_sum(tf.matmul(tf.log(tf.transpose(A)), self.expectations_ph_[i][parent_index]))
+                for i in range(min(self.num_obs, 1)):
+                    A = tf.multiply(self.tr_matrix.tr_matrix(root.length), tf.reshape(self.observations_ph_[i][self.index[root.name]], (1, self.num_states)))
+                    A = tf.reshape(tf.reduce_sum(A, axis=1), (1, self.num_states))
+                    placeholders_ = { self.observations_ph_ : self.observations_[0],
+                                      self.expectations_ph_ : self.expectations_[0]}
+                    self.log_likelihood += \
+                            tf.matmul(tf.log(A), tf.reshape(self.expectations_ph_[i][parent_index], (self.num_states, 1)))
 
+            # Could be here
             else:
-                for i in range(min(self.num_obs, 200)):
-                    self.log_likelihood[self.index[root.name]][i] += tf.reduce_sum(tf.matmul(tf.log(tf.transpose(self.tr_matrix.tr_matrix(root.length))), self.expectations_ph_[i][parent_index]))
-                    compute_helper(root.left, self.index[root.name])
-                    compute_helper(root.right, self.index[root.name])
+                for i in range(min(self.num_obs, 1)):
+                    self.log_likelihood += \
+                        tf.reduce_sum(tf.matmul(tf.reshape(self.expectations_ph_[i][parent_index], (1, self.num_states)), tf.log(self.tr_matrix.tr_matrix(root.length))))
+                compute_helper(root.left, self.index[root.name])
+                compute_helper(root.right, self.index[root.name])
 
-        for i in range(min(self.num_obs, 200)):
-            self.log_likelihood += tf.reduce_sum(self.expectations_[i][self.index[self.root.name]]*tf.log(self.initial_distribution))
+
+        for i in range(min(self.num_obs, 1)):
+            self.log_likelihood += tf.reduce_sum(self.expectations_[i][self.index[self.root.name]]*tf.log(self.initial_distribution[i]))
         
         compute_helper(self.root.left, self.index[self.root.name])
         compute_helper(self.root.right, self.index[self.root.name])
+        #print(self.log_likelihood)
+        #self.log_likelihood = tf.reduce_sum(self.log_likelihood)
 
 
     def maximize_log_likelihood_(self):
         """
-        Minimizes the negative log complete conditional by stochastic
-        gradient descent.
+        Minimizes the negative log complete conditional by stochastic gradient descent.
         """
         prv = 0
         nxt = 1
@@ -291,17 +290,32 @@ class PhyloTree:
         update_ph = tf.placeholder(tf.float32, shape=(len(var), 2))
         update = tf.pack([tf.assign(var[i], update_ph[i][1] - step_ph*update_ph[i][0]) for i in range(len(var))])
 
-        while scipy.linalg.norm(grad) > 10 and prv != nxt:
-            step = 0.00001
-            samples = [np.random.randint(0, self.num_obs) for i in range(min(self.num_obs, 200))]
+        it = 0
+        moving_avg = np.zeros(100)
+        mv_avg = 0
+        while True: #prv != nxt: #scipy.linalg.norm(grad) > 0.1 and prv != nxt:
+            step = 0.001 # 3 tree step size
+            #step = 0.0001 # 7 tree step size
+            samples = [np.random.randint(0, self.num_obs) for i in range(min(self.num_obs, 1))]
+            #samples = [i for i in range(50)]
             placeholders_ = { self.observations_ph_ : self.observations_[samples],
                               self.expectations_ph_ : self.expectations_[samples]}
             grad_var = self.sess.run(self.gradient, feed_dict=placeholders_)
             grad = np.array([grd[0] for grd in grad_var])
-            prv = self.sess.run(self.log_likelihood, feed_dict=placeholders_)
+            for i in range(10):
+                samples = [np.random.randint(0, self.num_obs) for i in range(min(self.num_obs, 1))]
+                placeholders_ = { self.observations_ph_ : self.observations_[samples],
+                                  self.expectations_ph_ : self.expectations_[samples]}
+                gv = self.sess.run(self.gradient, feed_dict=placeholders_)
+                for j in range(4):
+                    grad[0] += gv[j][0]
             self.sess.run(update, {update_ph : grad_var, step_ph: step})
+            prv = self.sess.run(self.log_likelihood, feed_dict=placeholders_)
+            self.sess.run(self.train, feed_dict=placeholders_)
+          
             nxt = self.sess.run(self.log_likelihood, feed_dict=placeholders_)
             
+            '''
             # Backtracking line search
             while np.isnan(nxt) or -nxt > -prv - 0.0001*step*grad.dot(grad):
                 step /= 2
@@ -310,6 +324,22 @@ class PhyloTree:
             
             grad_var = self.sess.run(self.gradient, feed_dict=placeholders_)
             grad = np.array([grd[0] for grd in grad_var])
+            '''
+            moving_avg[it % 100] = nxt
+            if it == 100:
+                mv_avg = moving_avg.sum() / 100
+
+            if it > 100 and it % 100 == 0:
+                if abs(mv_avg - (moving_avg.sum() / 100)) < 1:
+                    return
+                else:
+                    mv_avg = moving_avg.sum() / 100
+
+            if it > 100:
+                print("\titeration =", it)
+                print("\tmoving_avg =", moving_avg.sum() / 100)
+
+            it += 1
             print("\tlog_likelihood =", nxt)
             print("\tgrad_var =", grad_var)
             print("\tnorm =", np.linalg.norm(grad))
@@ -336,13 +366,17 @@ class PhyloTree:
             i1 = np.random.multinomial(1, row1).argmax()
             i2 = np.random.multinomial(1, row2).argmax()
             if self.is_leaf_node(node.left):
-                node.left.simulated_obs.append(self.tr_matrix.states[i1][0])
-                node.right.simulated_obs.append(self.tr_matrix.states[i2][0])
+                #node.left.simulated_obs.append(self.tr_matrix.states[i1][0])
+                #node.right.simulated_obs.append(self.tr_matrix.states[i2][0])
+                node.left.simulated_obs.append(self.tr_matrix.states[i1])
+                node.right.simulated_obs.append(self.tr_matrix.states[i2])
             else:
                 node.left.simulated_obs.append(self.tr_matrix.states[i1])
                 node.right.simulated_obs.append(self.tr_matrix.states[i2])
 
         if self.is_leaf_node(node.left):
+            #print("{}\t{}".format(node.left.name, "".join(node.left.simulated_obs)))
+            #print("{}\t{}".format(node.right.name, "".join(node.right.simulated_obs)))
             print("{}\t{}".format(node.left.name, node.left.simulated_obs))
             print("{}\t{}".format(node.right.name, node.right.simulated_obs))
 
@@ -378,9 +412,11 @@ class PhyloTree:
         init = tf.global_variables_initializer()
         self.sess = tf.Session()
         self.sess.run(init)
+        #self.calculate_expectations_(self.root)
+        #return
         self.compute_complete_log_likelihood_()
         self.optimizer = tf.train.GradientDescentOptimizer(0.001)
-        #self.train = self.optimizer.minimize(-self.log_likelihood)
+        self.train = self.optimizer.minimize(-self.log_likelihood)
         self.gradient = self.optimizer.compute_gradients(-self.log_likelihood)  
         #writer = tf.summary.FileWriter("log", graph=tf.get_default_graph())
 
@@ -389,7 +425,7 @@ class PhyloTree:
                                       self.tr_matrix.on_rate, self.tr_matrix.off_rate]))
         print("Running EM algorithm...")
         it = 1
-        while abs((nxt - prv).sum()) > 0.001:
+        while True: #abs((nxt - prv)).sum() > 0.001:
             print("iteration: ", it)
             print("\tE step...")
             self.calculate_expectations_(self.root)
@@ -401,7 +437,7 @@ class PhyloTree:
             #nxt = self.sess.run(self.log_likelihood, feed_dict=self.expected_value_ph)
             #parameters = np.array(self.sess.run([self.tr_matrix.tr_rate, self.tr_matrix.tv_rate,
             #                                     self.tr_matrix.on_rate, self.tr_matrix.off_rate]))
-            print("\tParameter estimates: ", nxt)
+            print("\tparameter estimates: ", nxt)
             it += 1
 
 
