@@ -143,10 +143,10 @@ class TransitionMatrix:
 
         t = tf.constant(time, dtype=tf.float32)
         ret = tf.eye(len(self.states), dtype=tf.float32, name="tr_matrix_" + str(time))
-        Q = self.Q / 8
+        Q = self.Q / 2
         for i in range(1, 10):
             ret += self.matrix_power(Q, i)*tf.pow(t, i) / tf.constant(factorial(i), dtype=tf.float32)
-        ret = self.matrix_power(ret, 8)
+        ret = self.matrix_power(ret, 2)
         self.tr_matrices[time] = ret
         return ret
 
