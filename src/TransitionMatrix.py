@@ -4,7 +4,26 @@ import scipy.linalg
 class TransitionMatrix:
 
     def __init__(self, tr_rate, tv_rate, on_rate, off_rate):
-        assert tr_rate > 0 and tv_rate > 0 and on_rate > 0 and off_rate > 0
+        if tr_rate < 0:
+            tr_rate = 0.01
+        elif tr_rate > 1:
+            tr_rate = 1.
+
+        if tv_rate < 0:
+            tv_rate = 0.01
+        elif tv_rate > 1:
+            tv_rate = 1.
+
+        if on_rate < 0:
+            on_rate = 0.01
+        elif on_rate > 1:
+            on_rate = 1.
+
+        if off_rate < 0:
+            off_rate = 0.01
+        elif off_rate > 1:
+            off_rate = 1.
+
         # transition rate
         self.tr_rate = tr_rate
 
