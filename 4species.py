@@ -37,7 +37,7 @@ if __name__ == "__main__":
         phylo_tree.simulate(10000)
         phylo_tree.set_simulated_observations()
         start_time = time.time()
-        estim = phylo_tree.estimate(observe_switch=True)
+        estim = phylo_tree.estimate()
         total_time = (time.time() - start_time) / 60.
         with open(argv[1], 'a') as f:
             f.write("{}\t{}\t{}\t{}\t{}\n".format(true_param, param, estim[0], estim[1], total_time))
