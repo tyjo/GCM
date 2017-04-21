@@ -10,22 +10,22 @@ if __name__ == "__main__":
     if len(argv) < 2:
         print("please provide output file")
         exit(1)
-    
-    # Tree: ((((hg19:0.006653,panTro2:0.006688):0.002482,gorGor1:0.008783):0.009697,ponAbe2:0.018183)
-    hg19 = tree.Node("hg19", 0.006653)
-    panTro2 = tree.Node("panTro2", 0.006688)
-    gorGor1 = tree.Node("gorGor1", 0.008783)
-    ponAbe2 = tree.Node("ponAbe", 0.018183)
-    hg_pan = tree.Node("hg19:panTro2", 0.002482)
-    hg_pan.left = hg19
-    hg_pan.right = panTro2
-    hg_pan_gor = tree.Node("hg_pan:gorGor1", 0.009697)
-    hg_pan_gor.left = hg_pan
-    hg_pan_gor.right = gorGor1
-    hg_pan_gor_pon = tree.Node("hg_pan_gor:ponAbe2", 0.018183)
-    hg_pan_gor_pon.left = hg_pan_gor
-    hg_pan_gor_pon.right = ponAbe2
 
+    # Build a phylogenetic tree
+    m = tm.TransitionMatrix(0.924, 1.283, 0.307, 0.662)
+    root = tree.Node("root", 0) # specify initial state
+    a1 = tree.Node("a1", 0.5)
+    a2 = tree.Node("a2", 0.5)
+    child1 = tree.Node("child1", 0.5)
+    child2 = tree.Node("child2", 0.5)
+    child3 = tree.Node("child3", 0.5)
+    child4 = tree.Node("child4", 0.5)
+    root.left = a1
+    root.right = a2
+    a1.left = child1
+    a1.right = child2
+    a2.left = child3
+    a2.right = child4
 
     with open(argv[1], 'w') as f:
         f.write('')
@@ -34,8 +34,8 @@ if __name__ == "__main__":
         param = [np.random.uniform(0.1, 0.9) for i in range(4)]
         true_param = param[:]
         m1 = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
-        phylo_tree = tree.PhyloTree(hg_pan_gor_pon, m1)
-        phylo_tree.simulate(100000)
+        phylo_tree = tree.PhyloTree(root, m1)
+        phylo_tree.simulate(10000)
         phylo_tree.set_simulated_observations()
         start_time = time.time()
         estim = phylo_tree.estimate()
@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
         param = [np.random.uniform(0.1, 0.9) for i in range(4)]
         m2 = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
-        phylo_tree = tree.PhyloTree(root,)
+        phylo_tree = tree.PhyloTree(root,m2)
 
         # Maximize log likelihood starting from random parameters
         with open(argv[1], 'a') as f:
@@ -62,5 +62,3 @@ if __name__ == "__main__":
             f.write("Inferred Parameters: {}\n".format(estim[0]))
             f.write("Log Likelihood: {}\n".format(estim[1]))
             f.write("Running Time: {}\n\n".format(total_time))
-
-
