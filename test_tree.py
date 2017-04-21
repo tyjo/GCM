@@ -52,7 +52,10 @@ if __name__ == "__main__":
 
         param = [np.random.uniform(0.1, 0.9) for i in range(4)]
         m2 = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
-        phylo_tree = tree.PhyloTree(root,m2)
+        phylo_tree = tree.PhyloTree(root, m2)
+        start_time = time.time()
+        estim = phylo_tree.estimate()
+        total_time = (time.time() - start_time) / 60.
 
         # Maximize log likelihood starting from random parameters
         with open(argv[1], 'a') as f:
