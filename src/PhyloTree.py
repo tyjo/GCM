@@ -112,6 +112,9 @@ class PhyloTree:
             #    right = tr_matrix.tr_matrix(root.right.length).dot(root.right.prob_below_[i])
             #    root.prob_below_[i] = left*right
 
+        for i in range(4):
+            if param[i] < 0 or param[i] > 1.5:
+                return -2147483648
 
         tr_matrix = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
         compute_helper(self.root, tr_matrix)
@@ -151,6 +154,7 @@ class PhyloTree:
                                                    for i in range(size) ])
         self.root.right.simulated_obs = np.array([ np.random.multinomial(1, right_transitions[i])
                                                    for i in range(size) ])
+        self.root.simulated_obs = None
         
         #print("{}\t{}".format(self.root.name, self.root.simulated_obs))
         self.simulate_(self.root.left)
@@ -174,6 +178,7 @@ class PhyloTree:
                                                    for i in range(len(node.simulated_obs)) ])
         node.right.simulated_obs = np.array([ np.random.multinomial(1, right_transitions[i])
                                                    for i in range(len(node.simulated_obs)) ])
+        node.simulated_obs = None
         
         #print("{}\t{}".format(node.left.name, node.left.simulated_obs))
         #print("{}\t{}".format(node.right.name, node.right.simulated_obs))
