@@ -22,24 +22,25 @@ if __name__ == "__main__":
     hg_pan_gor = tree.Node("hg_pan:gorGor1", 0.009697)
     hg_pan_gor.left = hg_pan
     hg_pan_gor.right = gorGor1
-    hg_pan_gor_pon = tree.Node("hg_pan_gor:ponAbe2")
+    hg_pan_gor_pon = tree.Node("hg_pan_gor:ponAbe2", 0.018183)
     hg_pan_gor_pon.left = hg_pan_gor
     hg_pan_gor_pon.right = ponAbe2
 
-    with open(argv[1], 'w') as f:
-        f.write('true\tstart\tinferred\tlog_likelihood\ttime\n')
 
-    for i in range(50):
-        param = [np.random.uniform(0.1, 1) for i in range(4)]
+    with open(argv[1], 'w') as f:
+        f.write('true\tinferred\tlog_likelihood\ttime\n')
+
+    for i in range(100):
+        param = [np.random.uniform(0.1, 0.9) for i in range(4)]
         true_param = param[:]
         m = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
         phylo_tree = tree.PhyloTree(hg_pan_gor_pon, m)
-        phylo_tree.simulate(10000)
+        phylo_tree.simulate(1000000)
         phylo_tree.set_simulated_observations()
         start_time = time.time()
         estim = phylo_tree.estimate()
         total_time = (time.time() - start_time) / 60.
         with open(argv[1], 'a') as f:
-            f.write("{}\t{}\t{}\t{}\t{}\n".format(true_param, param, estim[0], estim[1], total_time))
+            f.write("{}\t{}\t{}\t{}\n".format(true_param, estim[0], estim[1], total_time))
 
 
