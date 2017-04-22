@@ -107,10 +107,10 @@ class PhyloTree:
             left = tr_matrix.tr_matrix(root.left.length).dot(root.left.prob_below_.T)
             right = tr_matrix.tr_matrix(root.right.length).dot(root.right.prob_below_.T)
             root.prob_below_ = (left*right).T
-            #for i in range(self.num_obs):
-            #    left = tr_matrix.tr_matrix(root.left.length).dot(root.left.prob_below_[i])
-            #    right = tr_matrix.tr_matrix(root.right.length).dot(root.right.prob_below_[i])
-            #    root.prob_below_[i] = left*right
+            for i in range(self.num_obs):
+                left = tr_matrix.tr_matrix(root.left.length).dot(root.left.prob_below_[i])
+                right = tr_matrix.tr_matrix(root.right.length).dot(root.right.prob_below_[i])
+                root.prob_below_[i] = left*right
 
         for i in range(4):
             if param[i] < 0 or param[i] > 1.5:
@@ -178,6 +178,8 @@ class PhyloTree:
                                                    for i in range(len(node.simulated_obs)) ])
         node.right.simulated_obs = np.array([ np.random.multinomial(1, right_transitions[i])
                                                    for i in range(len(node.simulated_obs)) ])
+        # allow the garbage collector to remove observations from memory
+        # when they are no longer needed
         node.simulated_obs = None
         
         #print("{}\t{}".format(node.left.name, node.left.simulated_obs))
@@ -202,6 +204,7 @@ class PhyloTree:
             return
             
         root.observations = root.simulated_obs
+        root.simulated_obs = None
         self.set_simulated_observations_(root.left)
         self.set_simulated_observations_(root.right)
     

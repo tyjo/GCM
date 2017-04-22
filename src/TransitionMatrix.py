@@ -52,8 +52,10 @@ class TransitionMatrix:
                            "111": ["110", "101", "001"]}
 
         # rate matrix
-        self.Q = np.array([ [self.rate_matrix(s1, s2) for s2 in self.states] for s1 in self.states ])
+        self.Q =  self.compute_rate_matrix()
 
+        # stored transition matrices to prevent recomputation
+        self.tr_matrices = {}
 
     def off_diagional(self, fr, to):
         """
@@ -111,7 +113,9 @@ class TransitionMatrix:
         """
         Compute the for e^{Qt} for t = time.
         """
-        return scipy.linalg.expm(self.Q*time)
+        if not time in self.tr_matrices:
+            self.tr_matrices[time] = scipy.linalg.expm(self.Q*time)
+        return self.tr_matrices[time]
 
 
 
