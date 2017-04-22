@@ -107,10 +107,10 @@ class PhyloTree:
             left = tr_matrix.tr_matrix(root.left.length).dot(root.left.prob_below_.T)
             right = tr_matrix.tr_matrix(root.right.length).dot(root.right.prob_below_.T)
             root.prob_below_ = (left*right).T
-            for i in range(self.num_obs):
-                left = tr_matrix.tr_matrix(root.left.length).dot(root.left.prob_below_[i])
-                right = tr_matrix.tr_matrix(root.right.length).dot(root.right.prob_below_[i])
-                root.prob_below_[i] = left*right
+            #for i in range(self.num_obs):
+            #    left = tr_matrix.tr_matrix(root.left.length).dot(root.left.prob_below_[i])
+            #    right = tr_matrix.tr_matrix(root.right.length).dot(root.right.prob_below_[i])
+            #    root.prob_below_[i] = left*right
 
         for i in range(4):
             if param[i] < 0 or param[i] > 1.5:
