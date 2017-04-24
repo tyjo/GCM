@@ -49,7 +49,7 @@ class TransitionMatrix:
                            "110": ["100", "010"],
                            "101": ["100", "001"],
                            "011": ["010", "001"],
-                           "111": ["110", "101", "001"]}
+                           "111": ["110", "101", "011"]}
 
         # rate matrix
         self.Q =  self.compute_rate_matrix()
@@ -62,22 +62,19 @@ class TransitionMatrix:
         Returns off diagional entries (fr, to) in the rate matrix.
         """
         assert(fr != to)
-
-        # Transition
-        if fr[0] != to[0] and fr[1:] == to[1:] and self.transitions[fr[0]] == to[0]:
-            if (self.nucl_states.find(to[0]) < self.nucl_states.find(fr[0])):
-                index = self.nucl_states.find(to[0])
-            else:
-                index = self.nucl_states.find(to[0])-1
-            return int(fr[1:][index])*self.tr_rate
-
-        # Transversion
-        elif fr[0] != to[0] and fr[1:] == to[1:] and self.transitions[fr[0]] != to[0]:
-            if (self.nucl_states.find(to[0]) < self.nucl_states.find(fr[0])):
-                index = self.nucl_states.find(to[0])
-            else:
-                index = self.nucl_states.find(to[0])-1
-            return int(fr[1:][index])*self.tv_rate
+        
+        #C001 mutate to T010, not T001 
+        #do it with following transformation: C001 = 0 1 01, T010 =010 1
+        fr_code=fr[1:self.nucl_states.find(fr[0])+1]+'1'+fr[1+self.nucl_states.find(fr[0]):]
+        to_code=to[1:self.nucl_states.find(to[0])+1]+'1'+to[1+self.nucl_states.find(to[0]):]
+        
+        #transitions
+        if fr_code==to_code and self.transitions[fr[0]] == to[0]:
+            return self.tr_rate
+        
+        #transversions
+        elif fr_code==to_code and self.transitions[fr[0]] != to[0]:
+            return self.tv_rate
 
         # OFF => ON
         elif fr[0] == to[0] and to[1:] in self.on_switch[fr[1:]]:
