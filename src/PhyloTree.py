@@ -21,6 +21,9 @@ class Node:
         # Store simulated values
         self.simulated_obs = None
 
+    def __str__(self):
+        return '({}:{})'.format(self.name, self.length)
+
 
 
 class PhyloTree:
@@ -42,22 +45,24 @@ class PhyloTree:
         # If True, infers parameters based on observing both the
         # nucleotide and the switch. If false, infers parameters
         # based on nucleotide observations alone.
-        self.observe_switch = True
+        self.observe_switch = False
 
         assert root.left != None, "Trees must have at least one child node"
         self.check_tree_(self.root)
         self.set_initial_distribution(self.tr_matrix)
         self.setup_(self.root)
 
+
     def set_initial_distribution(self,tr_matrix):
         on_prob=tr_matrix.on_rate/(tr_matrix.on_rate+tr_matrix.off_rate)
         off_prob=tr_matrix.off_rate/(tr_matrix.on_rate+tr_matrix.off_rate)
-        print "on_prob=",on_prob," off_prob=",off_prob
+        #print "on_prob=",on_prob," off_prob=",off_prob
         self.initial_distribution = 0.25*np.array([\
             off_prob**3,off_prob**2*on_prob,off_prob**2*on_prob,off_prob**2*on_prob,\
             off_prob*on_prob**2,off_prob*on_prob**2,off_prob*on_prob**2,on_prob**3]*4)
         #print self.initial_distribution
     
+
     def check_tree_(self, root):
         """
         Make sure each node is either an internal node with 2 descendants or
@@ -92,11 +97,9 @@ class PhyloTree:
 
         if not self.observe_switch and self.is_leaf_node(root):
             root.prob_below_ = np.zeros((self.num_obs, self.num_states))
-            switch_state_prob=self.initial_distribution
             for i in range(self.num_obs):
-                root.prob_below_[i] = np.array([switch_state_prob[j]*4 \
+                root.prob_below_[i] = np.array([1. \
                 if root.observations[i][0] == self.tr_matrix.states[j][0] else 0. for j in range(self.num_states)])
-                #print root.observations[i],root.prob_below_[i]
         self.setup_(root.left)
         self.setup_(root.right)
 
@@ -114,17 +117,9 @@ class PhyloTree:
             compute_helper(root.left, tr_matrix)
             compute_helper(root.right, tr_matrix)
 
-            #root.prob_below_ = np.zeros((self.num_obs, self.num_states))
             left = tr_matrix.tr_matrix(root.left.length).dot(root.left.prob_below_.T)
             right = tr_matrix.tr_matrix(root.right.length).dot(root.right.prob_below_.T)
             root.prob_below_ = (left*right).T
-            
-            #print root.left.name,root.left.length,root.left.prob_below_
-            #print root.right.name,root.right.length, root.right.prob_below_
-            #for i in range(self.num_obs):
-            #    left = tr_matrix.tr_matrix(root.left.length).dot(root.left.prob_below_[i])
-            #    right = tr_matrix.tr_matrix(root.right.length).dot(root.right.prob_below_[i])
-            #    root.prob_below_[i] = left*right
 
         for i in range(4):
             if param[i] < 0.001 or param[i] > 1.5:
@@ -132,10 +127,8 @@ class PhyloTree:
 
         tr_matrix = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
         self.set_initial_distribution(tr_matrix)
-        self.setup_(self.root)
         compute_helper(self.root, tr_matrix)
         log_likelihood = np.log((self.root.prob_below_*self.initial_distribution).sum(axis=1)).sum()
-        #log_likelihood = np.log(self.root.prob_below_.sum(axis=1)).sum()
         assert(log_likelihood < 0.)
         print("log likelihood      =", log_likelihood)
         print("parameter estimates =", param)
@@ -165,7 +158,7 @@ class PhyloTree:
         self.set_initial_distribution(self.tr_matrix)
         self.root.simulated_obs = np.array( [ np.random.multinomial(1, self.initial_distribution)
                                               for i in range(size) ])
-        print self.initial_distribution
+        #print self.initial_distribution
         left_transitions = self.root.simulated_obs.dot(self.tr_matrix.tr_matrix(self.root.left.length))
         right_transitions = self.root.simulated_obs.dot(self.tr_matrix.tr_matrix(self.root.right.length))
         self.root.left.simulated_obs = np.array( [ np.random.multinomial(1, left_transitions[i])
@@ -228,7 +221,7 @@ class PhyloTree:
         self.set_simulated_observations_(root.right)
     
 
-    def estimate(self):
+    def estimate(self, observe_switch = False):
         """
         Runs the maximization routine to infer parameter values. If
         observe_switch is set to True, infers parameters based on both
@@ -237,8 +230,8 @@ class PhyloTree:
 
         Returns the final log likelihood along with estimated parameters.
         """
-        #self.observe_switch = observe_switch
-        np.seterr(under="raise") # raise an exception of underflow occurs
+        self.observe_switch = observe_switch
+        np.seterr(under="raise") # raise an exception if underflow occurs
         print("Running...")
 
         param = self.maximize_log_likelihood_()
