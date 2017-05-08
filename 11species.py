@@ -14,7 +14,7 @@ if __name__ == "__main__":
     # rheMac2:0.008812):0.002489,papHam1:0.008723):0.045139,calJac1:0.066437):0.057049,tarSyr1:0.137822):0.010992,
     # (micMur1:0.092888,otoGar1:0.129500):0.035423):0.015348,
     #  tupBel1:0.186424)
-    length_factor=10
+    length_factor=1
     hg19 = tree.Node("hg19", 0.006653*length_factor)
     panTro2 = tree.Node("panTro2", 0.006688*length_factor)
     gorGor1 = tree.Node("gorGor1", 0.008783*length_factor)
@@ -63,13 +63,13 @@ if __name__ == "__main__":
     with open(argv[1], 'w') as f:
         f.write('')
 
-    for i in range(1):
-        #param = [np.random.uniform(0.1, 0.9) for i in range(4)]
-        param=[0.2,0.5,0.1,0.2]
+    for i in range(50):
+        param = [np.random.uniform(0.05, 1) for i in range(4)]
+        #param=[0.2,0.5,0.1,0.2]
         true_param = param[:]
         m1 = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
         phylo_tree = tree.PhyloTree(root, m1)
-        phylo_tree.simulate(1000)
+        phylo_tree.simulate(5000)
         phylo_tree.set_simulated_observations()
         start_time = time.time()
         estim = phylo_tree.estimate()
@@ -84,7 +84,7 @@ if __name__ == "__main__":
             f.write("Log Likelihood: {}\n".format(estim[1]))
             f.write("Running Time: {}\n".format(total_time))
 
-        param = [np.random.uniform(0.1, 0.9) for i in range(4)]
+        param = [np.random.uniform(0.05, 1) for i in range(4)]
         m2 = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
         phylo_tree = tree.PhyloTree(root, m2)
         start_time = time.time()

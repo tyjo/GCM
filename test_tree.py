@@ -26,11 +26,16 @@ if __name__ == "__main__":
     a1.right = child2
     a2.left = child3
     a2.right = child4
+    phylo_tree = tree.PhyloTree(root, m)
+    phylo_tree.simulate(100000)
+    phylo_tree.set_simulated_observations()
+    estim = phylo_tree.estimate()
+    exit(0)
 
     with open(argv[1], 'w') as f:
         f.write('')
 
-    for i in range(100):
+    for i in range(50):
         param = [np.random.uniform(0.1, 0.9) for i in range(4)]
         true_param = param[:]
         m1 = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
