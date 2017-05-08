@@ -236,6 +236,7 @@ class PhyloTree:
 
         param = self.maximize_log_likelihood_()
         lk = self.compute_log_likelihood_(param)
+        self.tr_matrix = tm.TransitionMatrix(param[0], param[1], param[2], param[3])
         return (param, lk)
         
 
