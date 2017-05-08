@@ -12,8 +12,7 @@ if __name__ == "__main__":
         exit(1)
 
     # Build a phylogenetic tree
-    m = tm.TransitionMatrix(0.924, 1.283, 0.307, 0.662)
-    root = tree.Node("root", 0) # specify initial state
+    root = tree.Node("root")
     a1 = tree.Node("a1", 0.5)
     a2 = tree.Node("a2", 0.5)
     child1 = tree.Node("child1", 0.5)
@@ -26,11 +25,6 @@ if __name__ == "__main__":
     a1.right = child2
     a2.left = child3
     a2.right = child4
-    phylo_tree = tree.PhyloTree(root, m)
-    phylo_tree.simulate(100000)
-    phylo_tree.set_simulated_observations()
-    estim = phylo_tree.estimate()
-    exit(0)
 
     with open(argv[1], 'w') as f:
         f.write('')
