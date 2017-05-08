@@ -17,7 +17,7 @@ Similarly, estimating model parameters consists of three parts:
 
 1. Specifying the transition matrix
 2. Specifying the phylogenetic tree
-3. Calling estimate function
+3. Estimating parameters
 
 ### Specifying the transition matrix
 The transition matrix takes 4 parameters: transition rate, transversion rate, on rate, and off rate. On rate specifies the rate of switches from OFF to ON, where off rate specifies the rate of switches from ON to OFF.
@@ -36,8 +36,8 @@ Phylogenetic trees are specified as nodes in the tree, each with a branch length
 import src.PhyloTree as tree
 
 root = tree.Node(name="root", length=0)
-child1 = tree.Node(name="child1", length=20)
-child2 = tree.Node(name="child2", length=20)
+child1 = tree.Node(name="child1", length=0.2)
+child2 = tree.Node(name="child2", length=0.2)
 root.left = child1
 root.right = child2
 phylo_tree = tree.PhyloTree(root, matrix)
@@ -46,26 +46,26 @@ phylo_tree = tree.PhyloTree(root, matrix)
 ### Simulating data
 Given a phylogenetic tree and transition matrix, data can by simulated by calling
 
-```python
+```
 phylo_tree.simulate(N)
 ```
 where N is the length of the sequence.
 
 ### Inference
-Inference proceeds by maximum likelihood. The initial parameters of the transition matrix are those that are passed to the constructor. Observed sequences are specified in the Node constructor.
+Inference proceeds by maximum likelihood. The initial parameters of the transition matrix are those that are passed to the constructor. Observed sequences are specified in the Node constructor. The example below infers parameters for a 4 species tree with 100 base pair sequences.
 
 ```python
 import src.TransitionMatrix as tm
 import src.PhyloTree as tree
 
-m = tm.TransitionMatrix(0.2, 0.1, 0.3, 0.5)
+m = tm.TransitionMatrix(0.83, 0.55, 0.49, 0.71)
 root = tree.Node("root")
-a1 = tree.Node("a1", 10)
-a2 = tree.Node("a2", 10)
-child1 = tree.Node("child1", 20, "AC")
-child2 = tree.Node("child2", 20, "AC")
-child3 = tree.Node("child3", 20, "TC")
-child4 = tree.Node("child4", 20, "TC")
+a1 = tree.Node("a1", 0.5)
+a2 = tree.Node("a2", 0.5)
+child1 = tree.Node("child1", 0.5, "GCCAGTCAACAAATTCGTGCACTAGGTAGGGTAATTTCCCCAGTCCTTAGTTCGCTACAAACTTCTTAACCATGATTAAGCCCTGGATTTGCTCAATACG")
+child2 = tree.Node("child2", 0.5, "ACGACACAAAACATGAGTGGCGTTAGTCCGCTGATTTCCCTAGGCCTTATATTGCTACGGTCGTGTGCACCATGATCTTATAGAGGATTAACGGAATACG")
+child3 = tree.Node("child3", 0.5, "ACAATTAAAGACCTTCATGGACAAAACAGCGCCATTTGATTTCTCGTCCGTTTATACCCCTGCTCAGAGCGCTGACTTACAGATGCAGTGGCTGCAACCC")
+child4 = tree.Node("child4", 0.5, "ACACTACTCTAAATTCATGGACTAAAGCGCGCCATGTGATTTGTGGTCCTTTGATTACCATGATCTTTGCCCTGAACTACGGATGCATGGGCTGCTAAAG")
 root.left = a1
 root.right = a2
 a1.left = child1
@@ -77,6 +77,8 @@ phylo_tree = tree.PhyloTree(root, m)
 phylo_tree.estimate()
 phylo_tree.print_parameters()
 ```
+
+Parameters provided to the transition matrix specify initial parameters passed to the numerical optimization routine.
 
 ## Example code
 Usage examples are provided in ```test_tree.py```, ```4species.py```, and ```11species.py```. Each file simulates 50 replicates on the specified tree, and estimates parameters from i) the true parameter initialization, and; ii) a random initialization. Results are output to a file provided as a command line argument:
