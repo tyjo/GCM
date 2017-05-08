@@ -1,6 +1,6 @@
 # Simulation and estimation under the Generalized Covarion Model
 
-Parameter estimation by maximum likelihood under the generalized covarion model.
+Maximum likelihood parameter estimation under the generalized covarion model.
 
 ## Dependencies
 1. Numpy >= 1.12.1
@@ -11,13 +11,13 @@ Simulating data consists of three parts:
 
 1. Specifying the transition matrix
 2. Specifying the phylogenetic tree
-3. Simulating data on the tree
+3. Calling simulate() on the tree
 
 Similarly, estimating model parameters consists of three parts:
 
 1. Specifying the transition matrix
 2. Specifying the phylogenetic tree
-3. Estimating parameters
+3. Calling estimate() on the tree
 
 ### Specifying the transition matrix
 The transition matrix takes 4 parameters: transition rate, transversion rate, on rate, and off rate. On rate specifies the rate of switches from OFF to ON, where off rate specifies the rate of switches from ON to OFF.
@@ -29,8 +29,8 @@ matrix = tm.TransitionMatrix(tr_rate, tv_rate, on_rate, off_rate)
 ```
 
 
-### Building the phylogenetic tree
-Phylogenetic trees are specified as nodes in the tree, each with a branch length that corresponds to the length to the node's ancester. The root node has length 0. The nodes are linked together by specifying left and right childen. A phylogenetic tree is defined through both a root node and transition matrix. To specify a tree with 2 observations, with common ancestor "root" 
+### Building a phylogenetic tree
+Phylogenetic trees are specified by nodes in the tree, each with a branch length that corresponds to the length to the node's direct parent. The root node can have an arbitrary length. The nodes are linked together by specifying left and right childen. A phylogenetic tree is defined through both a root node and transition matrix. To specify a tree with 2 species with common ancestor "root" 
 
 ```python
 import src.PhyloTree as tree
@@ -52,7 +52,7 @@ phylo_tree.simulate(N)
 where N is the length of the sequence.
 
 ### Inference
-Inference proceeds by maximum likelihood. The initial parameters of the transition matrix are those that are passed to the constructor. Observed sequences are specified in the Node constructor. The example below infers parameters for a 4 species tree with 100 base pair sequences.
+Inference proceeds by maximum likelihood. The initial parameters are specified in the transition matrix. Observed sequences are specified in the Node constructor. The example below infers parameters for a 4 species tree with 100 base pair sequences.
 
 ```python
 import src.TransitionMatrix as tm
