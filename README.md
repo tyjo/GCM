@@ -1,6 +1,10 @@
 # Simulation and estimation under the Generalized Covarion Model
 
-Expectation maximization for the generalized covarion model.
+Parameter estimation by maximum likelihood under the generalized covarion model.
+
+## Dependencies
+1. Numpy >= 1.12.1
+2. Python 3
 
 ## Simulation and Estimation
 Simulating data consists of three parts:
@@ -13,7 +17,7 @@ Similarly, estimating model parameters consists of three parts:
 
 1. Specifying the transition matrix
 2. Specifying the phylogenetic tree
-3. Calling the EM algorithm
+3. Calling estimate function
 
 ### Specifying the transition matrix
 The transition matrix takes 4 parameters: transition rate, transversion rate, on rate, and off rate. On rate specifies the rate of switches from OFF to ON, where off rate specifies the rate of switches from ON to OFF.
@@ -48,7 +52,7 @@ phylo_tree.simulate(N)
 where N is the length of the sequence.
 
 ### Inference
-Inference proceeds by expectation maximization. The initial parameters of the transition matrix are those that are passed to the constructor.
+Inference proceeds by maximum likelihood. The initial parameters of the transition matrix are those that are passed to the constructor. Observed sequences are specified in the Node constructor.
 
 ```python
 import src.TransitionMatrix as tm
@@ -74,4 +78,9 @@ phylo_tree.estimate()
 phylo_tree.print_parameters()
 ```
 
-See ```main.py``` for complete examples.
+## Example code
+Usage examples are provided in ```test_tree.py```, ```4species.py```, and ```11species.py```. Each file simulates 50 replicates on the specified tree, and estimates parameters from i) the true parameter initialization, and; ii) a random initialization. Results are output to a file provided as a command line argument:
+
+```
+python test_tree.py test_output
+```
