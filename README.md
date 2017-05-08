@@ -80,8 +80,31 @@ phylo_tree.print_parameters()
 
 Parameters provided to the transition matrix specify initial parameters passed to the numerical optimization routine.
 
+This example is provided in ```sample.py```. To estimate parameters on this example, call
+
+```python sample.py```
+
+You should see
+
+```
+...
+...
+...
+parameter estimates = [ 0.09128966  0.29990838  0.25255296  0.05355357]
+log likelihood      = -472.739894676
+parameter estimates = [ 0.09128615  0.29990093  0.25248618  0.05353279]
+log likelihood      = -472.739894675
+parameter estimates = [ 0.09128992  0.29990558  0.25252533  0.05354676]
+log likelihood      = -472.739894675
+parameter estimates = [ 0.09128992  0.29990558  0.25252533  0.05354676]
+tr_rate:	 0.091289918036
+tv_rate:	 0.299905582895
+on_rate:	 0.252525328397
+off_rate:	 0.0535467552549
+```
+
 ## Example code
-Usage examples are provided in ```test_tree.py```, ```4species.py```, and ```11species.py```. Each file simulates 50 replicates on the specified tree, and estimates parameters from i) the true parameter initialization, and; ii) a random initialization. Results are output to a file provided as a command line argument:
+More usage examples are provided in ```test_tree.py```, ```4species.py```, and ```11species.py```. Each file simulates 50 replicates on the specified tree, and estimates parameters from i) the true parameter initialization, and; ii) a random initialization. Results are output to a file provided as a command line argument:
 
 ```
 python test_tree.py test_output
